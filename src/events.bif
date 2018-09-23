@@ -1,0 +1,1093 @@
+#
+# Events for the ISO over TCP / S7Comm analyzer
+# 
+# Author: Dane Wullen
+# Date: 10.04.2018
+# Version: 1.0
+# 
+# This plugin is a part of a master's thesis written at Fachhochschule in Aachen (Aachen University of Applied Sciences)
+# 
+#
+
+# TPKT / COTP events
+
+## Generated for every TPKT packet seen on wire
+##
+## c: The connection
+##
+## version: TPKT version, should be 3
+##
+## length: Length of the following content
+##
+event tpkt_packet%(c: connection, version: count, lenght: count%);
+
+## Generated for every COTP packet seen on wire
+##
+## c: The connection
+##
+## tdpu_type: Number of TDPU
+##
+event cotp_packet%(c: connection, tdpu_type: count%);
+
+# Regular S7 function events
+
+## Generated for every S7 Acknowledge packet seen on wire
+##
+## c: The connection
+##
+## header: S7Header, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+event s7_ack%(c: connection, header: S7Comm::S7Header%);
+
+## Generated for every S7 CPU Service packet seen on wire
+## No further information is known about this kind of packet, so it just contains the connection and S7Header
+##
+## c: The connection
+##
+## header: S7Header, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+event s7_cpu_service%(c: connection, header: S7Comm::S7Header%);
+
+## Generated for every S7 Setup Communication Job/Request packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## param: Record type, including information about queue length and packet size.
+##
+event s7_job_setup_communication%(c: connection, header: S7Comm::S7Header, param: S7Comm::S7SetupCommParam%);
+
+## Generated for every S7 Setup Communication AckData/Response packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## param: Record type, including information about queue length and packet size.
+##
+event s7_ackdata_setup_communication%(c: connection, header: S7Comm::S7Header, param: S7Comm::S7SetupCommParam%);
+
+## Generated for every S7 Read Job/Request item of type 'Any' seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## items: Total number of items of this Job/Request. 
+##
+## item_num: Current item index
+## 
+## item: Record type, contains information about an item of type 'Any'
+##
+event s7_job_read_variable_any_type%(c: connection, header: S7Comm::S7Header, items: count, item_num: count, item: S7Comm::S7AnyTypeItem%);
+
+## Generated for every S7 Read Job/Request item of type 'DB' seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## items: Total number of items of this Job/Request. 
+##
+## item_num: Current item index
+## 
+## item: Record type, contains information about an item of type 'DB'
+##
+event s7_job_read_variable_db_type%(c: connection, header: S7Comm::S7Header, items: count, item_num: count, item: S7Comm::S7DBTypeItem%);
+
+## Generated for every S7 Read Job/Request item of type 'SYM' seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## items: Total number of items of this Job/Request. 
+##
+## item_num: Current item index
+## 
+## item: Record type, contains information about an item of type 'SYM'
+##
+event s7_job_read_variable_1200_sym_type%(c: connection, header: S7Comm::S7Header, items: count, item_num: count, item: S7Comm::S71200SymTypeItem%);
+
+## Generated for every S7 Read Job/Request item of type 'NCK' seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## items: Total number of items of this Job/Request. 
+##
+## item_num: Current item index
+## 
+## item: Record type, contains information about an item of type 'NCK'
+##
+event s7_job_read_variable_nck_type%(c: connection, header: S7Comm::S7Header, items: count, item_num: count, item: S7Comm::S7NCKTypeItem%);
+
+## Generated for every S7 Read Job/Request item of type 'DriveAny' seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## items: Total number of items of this Job/Request. 
+##
+## item_num: Current item index
+## 
+## item: Record type, contains information about an item of type 'DriveAny'
+##
+event s7_job_read_variable_drive_any_type%(c: connection, header: S7Comm::S7Header, items: count, item_num: count, item: S7Comm::S7DriveAnyTypeItem%);
+
+## Generated for every S7 Read AckData/Response packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## items: Total number of items of this Job/Request. 
+##
+## item_num: Current item index
+## 
+## data: Record type, contains variable information about a memory area
+##
+event s7_ackdata_read_data%(c: connection, header:S7Comm::S7Header, items: count, item_num: count, data: S7Comm::S7ReadWriteData%);
+
+## Generated for every S7 Read AckData/Response packet of type 'NCK' seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## items: Total number of items of this Job/Request. 
+##
+## item_num: Current item index
+## 
+## data: Record type, contains variable information an NCK item
+##
+event s7_ackdata_read_data_nck%(c: connection, header: S7Comm::S7Header, items: count, item_num: count, data: S7Comm::S7NCKTypeItem%);
+
+## Generated for every S7 Write Job/Request packet of type 'Any' seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## items: Total number of items of this Job/Request. 
+##
+## item_num: Current item index
+## 
+## item: Record type, contains information about an item of type 'Any'
+##
+## data: Record type, the data which will be send to the PLC
+##
+event s7_job_write_variable_any_type%(c: connection, header: S7Comm::S7Header, items: count, item_num: count, item: S7Comm::S7AnyTypeItem, data: S7Comm::S7ReadWriteData%);
+
+## Generated for every S7 Write Job/Request packet of type 'DB' seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## items: Total number of items of this Job/Request. 
+##
+## item_num: Current item index
+## 
+## item: Record type, contains information about an item of type 'DB'
+##
+## data: Record type, the data which will be send to the PLC
+##
+event s7_job_write_variable_db_type%(c: connection, header: S7Comm::S7Header, items: count, item_num: count, item: S7Comm::S7DBTypeItem, data: S7Comm::S7ReadWriteData%);
+
+## Generated for every S7 Write Job/Request packet of type 'SYM' seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## items: Total number of items of this Job/Request. 
+##
+## item_num: Current item index
+## 
+## item: Record type, contains information about an item of type 'SYM'
+##
+## data: Record type, the data which will be send to the PLC
+##
+event s7_job_write_variable_1200_sym_type%(c: connection, header: S7Comm::S7Header, items: count, item_num: count, item: S7Comm::S71200SymTypeItem, data: S7Comm::S7ReadWriteData%);
+
+## Generated for every S7 Write Job/Request packet of type 'NCK' seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## items: Total number of items of this Job/Request. 
+##
+## item_num: Current item index
+## 
+## item: Record type, contains information about an item of type 'NCK'
+##
+## data: Record type, the data which will be send to the PLC
+##
+event s7_job_write_variable_nck_type%(c: connection, header: S7Comm::S7Header, items: count, item_num: count, item: S7Comm::S7NCKTypeItem, data: S7Comm::S7ReadWriteData%);
+
+## Generated for every S7 Write Job/Request packet of type 'DriveAny' seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## items: Total number of items of this Job/Request. 
+##
+## item_num: Current item index
+## 
+## item: Record type, contains information about an item of type 'DriveAny'
+##
+## data: Record type, the data which will be send to the PLC
+##
+event s7_job_write_variable_drive_any_type%(c: connection, header: S7Comm::S7Header, items: count, item_num: count, item: S7Comm::S7DriveAnyTypeItem, data: S7Comm::S7ReadWriteData%);
+
+## Generated for every S7 Write AckData/Response packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## items: Total number of items of this Job/Request. 
+##
+## item_num: Current item index
+## 
+## return_code: Contains the return code, e. g. if the write was successful etc.
+##
+event s7_ackdata_write_data%(c: connection, header:S7Comm::S7Header, items: count, item_num: count, return_code: count%);
+
+## Generated for every S7 Start Upload Job/Request packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## param: Record type, contains information about the start upload
+##
+event s7_job_start_upload%(c: connection, header:S7Comm::S7Header, param: S7Comm::S7JobStartUpload%);
+
+## Generated for every S7 Start Upload AckData/Response packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## param: Record type, contains information about the start upload
+##
+event s7_ackdata_start_upload%(c: connection, header:S7Comm::S7Header, param: S7Comm::S7AckDataStartUpload%);
+
+## Generated for every S7 Upload Job/Request packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## func_status: Status code of the upload
+##
+## upload_id: Current ID of the upload
+##
+event s7_job_upload%(c: connection, header:S7Comm::S7Header, func_status: count, upload_id: count%);
+
+## Generated for every S7 Upload AckData/Response packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## func_status: Status code of the upload
+##
+## data_length: Length of the upload data
+##
+## data: Data of the upload, represented as a string
+##
+event s7_ackdata_upload%(c: connection, header:S7Comm::S7Header, func_status: count, data_length: count, data: string%);
+
+## Generated for every S7 End Upload Job/Request packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## func_status: Status code of the upload
+##
+## error_code: Contains a error code
+##
+## upload_id: Current upload ID
+##
+event s7_job_end_upload%(c: connection, header:S7Comm::S7Header, func_status: count, error_code: count, upload_id: count%);
+
+## Generated for every S7 End Upload AckData/Response packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+event s7_ackdata_end_upload%(c: connection, header:S7Comm::S7Header%);
+
+## Generated for every S7 Request Download Job/Request packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## param: Record type, information about the request
+##
+event s7_job_request_download%(c: connection, header:S7Comm::S7Header, param: S7Comm::S7JobRequestDownload%);
+
+## Generated for every S7 Request Download AckData/Response packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+event s7_ackdata_request_download%(c: connection, header:S7Comm::S7Header%);
+
+## Generated for every S7 Download Block Job/Request packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## param: Record type, information about the block download
+##
+event s7_job_download_block%(c: connection, header:S7Comm::S7Header, param: S7Comm::S7JobDownloadBlock%);
+
+## Generated for every S7 Download Block AckData/Response packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## func_status: Status of the block download
+##
+## param: Record type, information about the block download
+##
+event s7_ackdata_download_block%(c: connection, header:S7Comm::S7Header, func_status: count, param: S7Comm::S7AckDataDownloadBlock%);
+
+## Generated for every S7 Download Block AckData/Response packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## param: Record type, information about the end of the download
+##
+event s7_job_download_ended%(c: connection, header:S7Comm::S7Header, param: S7Comm::S7JobDownloadEnded%);
+
+## Generated for every S7 Download Block AckData/Response packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+event s7_ackdata_download_ended%(c: connection, header:S7Comm::S7Header%);
+
+## Generated for every S7 PLC Control Job/Request packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## service: Type of service as a string
+##
+## blocks: Number of blocks if available, else 0
+##
+## fields: Number of fields of available, else 0
+##
+## block: Vector of String, representing variable blocks
+##
+event s7_job_plc_control%(c: connection, header:S7Comm::S7Header, service: string, blocks: count, fields: count, block: string_vec%);
+
+## Generated for every S7 PLC Control AckData/Response packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+event s7_ackdata_plc_control%(c: connection, header:S7Comm::S7Header%);
+
+## Generated for every S7 PLC Stop Job/Request packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+## filename: File/Program which will be stopped
+##
+event s7_job_plc_stop%(c: connection, header:S7Comm::S7Header, filename: string%);
+
+## Generated for every S7 PLC Stop AckData/Response packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, including information like Protocol ID, MSG-Type etc. See types.bro for more information
+##
+event s7_ackdata_plc_stop%(c: connection, header:S7Comm::S7Header%);
+
+# UserData events
+
+# Function group 1: Programmer commands
+
+## Generated for every S7 UserData Programmer Commands Request Diag-Data V1 packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## data: Record type, data of the function
+##
+event s7_ud_prog_reqdiagdata1%(c: connection, header:S7Comm::S7Header, packet_type: string, data: S7Comm::S7UDReqDiagData%);
+
+## Generated for every S7 UserData Programmer Commands Request Diag-Data V2 packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## data: Record type, data of the function
+##
+event s7_ud_prog_reqdiagdata2%(c: connection, header:S7Comm::S7Header, packet_type: string, data: S7Comm::S7UDReqDiagData%);
+
+## Generated for every S7 UserData Programmer Commands Vartab 1 Request packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## data: Record type, data of the function
+##
+event s7_ud_prog_vartab1_request%(c: connection, header:S7Comm::S7Header, packet_type: string, data: S7Comm::S7UDVarTab1ReqData%);
+
+## Generated for every S7 UserData Programmer Commands Response Diag-Data 1 packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## data: Record type, data of the function
+##
+event s7_ud_prog_vartab1_response%(c: connection, header:S7Comm::S7Header, packet_type: string, data: S7Comm::S7UDVarTab1ResData%);
+
+## Generated for every unknown S7 UserData Programmer Commands packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## subfunction: Value of the unknown subfunction
+##
+## data: Remaining data represented as string
+##
+event s7_ud_prog_unknown%(c: connection, header:S7Comm::S7Header, packet_type: string, subfunction: count, data: S7Comm::S7UDUnknownData%);
+
+## Generated for every S7 UserData Cyclic Data item of type 'Any' seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## return_code: Value of the return code
+##
+## transport_size: Representation of the data, e. g. OCTET STRING, INTERGER etc.
+##
+## items: Total amount of items in this packet
+##
+## item_num: Current item index
+##
+## interval_timebase: Value of the timebase
+##
+## interval_time: Value of the interval time
+##
+## item: Record type, actual data of the item
+##
+event s7_ud_cycl_mem_any%(c: connection, header:S7Comm::S7Header, packet_type: string, return_code: count, transport_size: count, items: count, item_num: count, interval_timebase: count, interval_time: count, item: S7Comm::S7AnyTypeItem%);
+
+## Generated for every S7 UserData Cyclic Data item of type 'DB' seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## return_code: Value of the return code
+##
+## transport_size: Representation of the data, e. g. OCTET STRING, INTERGER etc.
+##
+## items: Total amount of items in this packet
+##
+## item_num: Current item index
+##
+## interval_timebase: Value of the timebase
+##
+## interval_time: Value of the interval time
+##
+## item: Record type, actual data of the item
+##
+event s7_ud_cycl_mem_db%(c: connection, header:S7Comm::S7Header, packet_type: string, return_code: count, transport_size: count, items: count, item_num: count, interval_timebase: count, interval_time: count, item: S7Comm::S7DBTypeItem%);
+
+## Generated for every S7 UserData Cyclic Data item of type 'SYM' seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## return_code: Value of the return code
+##
+## transport_size: Representation of the data, e. g. OCTET STRING, INTERGER etc.
+##
+## items: Total amount of items in this packet
+##
+## item_num: Current item index
+##
+## interval_timebase: Value of the timebase
+##
+## interval_time: Value of the interval time
+##
+## item: Record type, actual data of the item
+##
+event s7_ud_cycl_mem_sym%(c: connection, header:S7Comm::S7Header, packet_type: string, return_code: count, transport_size: count, items: count, item_num: count, interval_timebase: count, interval_time: count, item: S7Comm::S71200SymTypeItem%);
+
+## Generated for every S7 UserData Cyclic Data item of type 'NCK' seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## return_code: Value of the return code
+##
+## transport_size: Representation of the data, e. g. OCTET STRING, INTERGER etc.
+##
+## items: Total amount of items in this packet
+##
+## item_num: Current item index
+##
+## interval_timebase: Value of the timebase
+##
+## interval_time: Value of the interval time
+##
+## item: Record type, actual data of the item
+##
+event s7_ud_cycl_mem_nck%(c: connection, header:S7Comm::S7Header, packet_type: string, return_code: count, transport_size: count, items: count, item_num: count, interval_timebase: count, interval_time: count, item: S7Comm::S7NCKTypeItem%);
+
+## Generated for every S7 UserData Cyclic Data item of type 'DriveAny' seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## return_code: Value of the return code
+##
+## transport_size: Representation of the data, e. g. OCTET STRING, INTERGER etc.
+##
+## items: Total amount of items in this packet
+##
+## item_num: Current item index
+##
+## interval_timebase: Value of the timebase
+##
+## interval_time: Value of the interval time
+##
+## item: Record type, actual data of the item
+##
+event s7_ud_cycl_mem_drive%(c: connection, header:S7Comm::S7Header, packet_type: string, return_code: count, transport_size: count, items: count, item_num: count, interval_timebase: count, interval_time: count, item: S7Comm::S7DriveAnyTypeItem%);
+
+## Generated for every S7 UserData Cyclic Data Response item seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## return_code: Value of the return code
+##
+## transport_size: Representation of the data, e. g. OCTET STRING, INTERGER etc.
+##
+## items: Total amount of items in this packet
+##
+## item_num: Current item index
+##
+## item: Record type, actual data of the item
+##
+event s7_ud_cycl_mem_ack%(c: connection, header:S7Comm::S7Header, packet_type: string, return_code: count, transport_size: count, items: count, item_num: count, item: S7Comm::S7ReadWriteData%);
+
+## Generated for every S7 UserData Cyclic Data Response item of type 'NCK' seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## return_code: Value of the return code
+##
+## transport_size: Representation of the data, e. g. OCTET STRING, INTERGER etc.
+##
+## items: Total amount of items in this packet
+##
+## item_num: Current item index
+##
+## item: Record type, actual data of the item
+##
+event s7_ud_cycl_mem_ack_nck%(c: connection, header:S7Comm::S7Header, packet_type: string, return_code: count, transport_size: count, items: count, item_num: count, item: S7Comm::S7NCKTypeItem%);
+
+## Generated for every S7 UserData Cyclic Data Response item of type 'Any' seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## data: Record type, remaining, unknown data
+##
+event s7_ud_cycl_unsub%(c: connection, header:S7Comm::S7Header, packet_type: string, data: S7Comm::S7UDUnknownData%);
+
+
+## Generated for every S7 UserData Block List Response packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## data: Record type, data of Block List response
+##
+event s7_ud_block_list_res%(c: connection, header:S7Comm::S7Header, packet_type: string, data: S7Comm::S7UDBlockList%);
+
+## Generated for every S7 UserData Block List request packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## return_value: Error code
+##
+## transport_size: Representation of the following data, e. g. OCTET STRING, INTEGER etc.
+##
+## data_length: Length of the following data
+##
+## data: Remaining data as String
+##
+event s7_ud_block_listtype_req%(c: connection, header:S7Comm::S7Header, packet_type: string, return_value: count, transport_size: count, data_length: count, data: string%);
+
+## Generated for every S7 UserData Block List-Type response packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## data: Record type, data of the List-Type response
+##
+event s7_ud_block_listtype_res%(c: connection, header:S7Comm::S7Header, packet_type: string, data: S7Comm::S7UDBlockList%);
+
+## Generated for every S7 UserData Block Block-Info request packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## data: Record type, data of the Block-Info request
+##
+event s7_ud_block_blockinfo_req%(c: connection, header:S7Comm::S7Header, packet_type: string, data: S7Comm::S7UDBlockInfoReq%);
+
+## Generated for every S7 UserData Block Block-Info response packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## data: Record type, data of the Block-Info response
+##
+event s7_ud_block_blockinfo_res%(c: connection, header:S7Comm::S7Header, packet_type: string, data: S7Comm::S7UDBlockInfoRes%);
+
+## Generated for every unknown S7 UserData Block packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## subfunction: Value of the unknown subfunction
+##
+## data: Remaining data represented as string
+##
+event s7_ud_block_unknown%(c: connection, header:S7Comm::S7Header, packet_type: string, subfunction: count, data: S7Comm::S7UDUnknownData%);
+
+## Generated for every S7 UserData CPU Read packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## szl_id: ID of the Systemzustandsliste
+##
+## szl_index: Index of the Systemzustandsliste
+##
+event s7_ud_cpu_read_szl%(c: connection, header:S7Comm::S7Header, packet_type: string, szl_id: string, szl_index: string%);
+
+## Generated for every unknown S7 UserData CPU packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## subfunction: Value of the unknown subfunction
+##
+## data: Remaining data represented as string
+##
+event s7_ud_cpu_unknown%(c: connection, header:S7Comm::S7Header, packet_type: string, subfunction: count, data: S7Comm::S7UDUnknownData%);
+
+## Generated for every S7 UserData Security packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## data: Record type, remaining unknown data
+##
+event s7_ud_security%(c: connection, header:S7Comm::S7Header, packet_type: string, data: S7Comm::S7UDUnknownData%);
+
+## Generated for every S7 UserData PBC packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## data: Record type, remaining data of the packet
+##
+event s7_ud_pbc%(c: connection, header:S7Comm::S7Header, packet_type: string, data: S7Comm::S7UDPBC%);
+
+## Generated for every S7 UserData Time Read packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## data: Record type, data of Time Read
+##
+event s7_ud_time_read%(c: connection, header:S7Comm::S7Header, packet_type: string, data: S7Comm::S7UDTime%);
+
+## Generated for every S7 UserData Time Readf packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## data: Record type, data of Time Readf
+##
+event s7_ud_time_readf%(c: connection, header:S7Comm::S7Header, packet_type: string, data: S7Comm::S7UDTime%);
+
+## Generated for every S7 UserData Time Set V1 packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## data: Record type, data of Time Set V1
+##
+event s7_ud_time_set1%(c: connection, header:S7Comm::S7Header, packet_type: string, data: S7Comm::S7UDTime%);
+
+## Generated for every S7 UserData Time Set V2 packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## data: Record type, data of Time Set V2
+##
+event s7_ud_time_set2%(c: connection, header:S7Comm::S7Header, packet_type: string, data: S7Comm::S7UDTime%);
+
+## Generated for every unknown S7 UserData Time packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## data: Record type, remaining unknown data
+##
+event s7_ud_time_unknown%(c: connection, header:S7Comm::S7Header, packet_type: string, subfunction: count, data: S7Comm::S7UDUnknownData%);
+
+## Generated for every S7 UserData NCPROG packet seen on wire
+##
+## c: The connection
+##
+## header: Record type, contains information about the S7Header
+##
+## packet_type: Request/Response/Push
+##
+## subfunction: Value of unknown subfunction
+##
+## data: Record type, remaining unknown data
+##
+event s7_ud_ncprog%(c: connection, header:S7Comm::S7Header, packet_type: string, subfunction: count, data: S7Comm::S7UDUnknownData%);
+
+# S7CommPlus events
+
+## Generated for every S7Comm Plus Notification packet seen on wire
+##
+## c: The connection
+##
+## packet_type: Request/Response/Push
+##
+## header: Record type, contains information about the S7Comm Plus Header
+##
+## data: Remaining data as string
+##
+## trailer: Record type, caontains information about the S7Comm Plus Trailer
+##
+event s7p_notification%(c: connection, packet_type: string, sequence_number: count, session_id: count, header:S7CommPlus::S7PHeader, data: string, trailer: S7CommPlus::S7PTrailer%);
+
+## Generated for every S7Comm Plus Explore packet seen on wire
+##
+## c: The connection
+##
+## packet_type: Request/Response/Push
+##
+## header: Record type, contains information about the S7Comm Plus Header
+##
+## data: Remaining data as string
+##
+## trailer: Record type, caontains information about the S7Comm Plus Trailer
+##
+event s7p_explore%(c: connection, packet_type: string, sequence_number: count, session_id: count, header:S7CommPlus::S7PHeader, data: string, trailer: S7CommPlus::S7PTrailer%);
+
+## Generated for every S7Comm Plus Create Object packet seen on wire
+##
+## c: The connection
+##
+## packet_type: Request/Response/Push
+##
+## header: Record type, contains information about the S7Comm Plus Header
+##
+## data: Remaining data as string
+##
+## trailer: Record type, caontains information about the S7Comm Plus Trailer
+##
+event s7p_create_object%(c: connection, packet_type: string, sequence_number: count, session_id: count, header:S7CommPlus::S7PHeader, data: string, trailer: S7CommPlus::S7PTrailer%);
+
+## Generated for every S7Comm Plus Delete Object packet seen on wire
+##
+## c: The connection
+##
+## packet_type: Request/Response/Push
+##
+## header: Record type, contains information about the S7Comm Plus Header
+##
+## data: Remaining data as string
+##
+## trailer: Record type, caontains information about the S7Comm Plus Trailer
+##
+event s7p_delete_object%(c: connection, packet_type: string, sequence_number: count, session_id: count, header:S7CommPlus::S7PHeader, data: string, trailer: S7CommPlus::S7PTrailer%);
+
+## Generated for every S7Comm Plus Set Variable packet seen on wire
+##
+## c: The connection
+##
+## packet_type: Request/Response/Push
+##
+## header: Record type, contains information about the S7Comm Plus Header
+##
+## data: Remaining data as string
+##
+## trailer: Record type, caontains information about the S7Comm Plus Trailer
+##
+event s7p_set_variable%(c: connection, packet_type: string, sequence_number: count, session_id: count, header:S7CommPlus::S7PHeader, data: string, trailer: S7CommPlus::S7PTrailer%);
+
+## Generated for every S7Comm Plus Get Link packet seen on wire
+##
+## c: The connection
+##
+## packet_type: Request/Response/Push
+##
+## header: Record type, contains information about the S7Comm Plus Header
+##
+## data: Remaining data as string
+##
+## trailer: Record type, caontains information about the S7Comm Plus Trailer
+##
+event s7p_get_link%(c: connection, packet_type: string, sequence_number: count, session_id: count, header:S7CommPlus::S7PHeader, data: string, trailer: S7CommPlus::S7PTrailer%);
+
+## Generated for every S7Comm Plus Set Multi Variables packet seen on wire
+##
+## c: The connection
+##
+## packet_type: Request/Response/Push
+##
+## header: Record type, contains information about the S7Comm Plus Header
+##
+## data: Remaining data as string
+##
+## trailer: Record type, caontains information about the S7Comm Plus Trailer
+##
+event s7p_set_multi_variables%(c: connection, packet_type: string, sequence_number: count, session_id: count, header:S7CommPlus::S7PHeader, data: string, trailer: S7CommPlus::S7PTrailer%);
+
+## Generated for every S7Comm Plus Get Multi Variables packet seen on wire
+##
+## c: The connection
+##
+## packet_type: Request/Response/Push
+##
+## header: Record type, contains information about the S7Comm Plus Header
+##
+## data: Remaining data as string
+##
+## trailer: Record type, caontains information about the S7Comm Plus Trailer
+##
+event s7p_get_multi_variables%(c: connection, packet_type: string, sequence_number: count, session_id: count, header:S7CommPlus::S7PHeader, data: string, trailer: S7CommPlus::S7PTrailer%);
+
+## Generated for every S7Comm Plus Begin Sequence packet seen on wire
+##
+## c: The connection
+##
+## packet_type: Request/Response/Push
+##
+## header: Record type, contains information about the S7Comm Plus Header
+##
+## data: Remaining data as string
+##
+## trailer: Record type, caontains information about the S7Comm Plus Trailer
+##
+event s7p_begin_sequence%(c: connection, packet_type: string, sequence_number: count, session_id: count, header:S7CommPlus::S7PHeader, data: string, trailer: S7CommPlus::S7PTrailer%);
+
+## Generated for every S7Comm Plus End Sequence packet seen on wire
+##
+## c: The connection
+##
+## packet_type: Request/Response/Push
+##
+## header: Record type, contains information about the S7Comm Plus Header
+##
+## data: Remaining data as string
+##
+## trailer: Record type, caontains information about the S7Comm Plus Trailer
+##
+event s7p_end_sequence%(c: connection, packet_type: string, sequence_number: count, session_id: count, header:S7CommPlus::S7PHeader, data: string, trailer: S7CommPlus::S7PTrailer%);
+
+## Generated for every S7Comm Plus Invoke packet seen on wire
+##
+## c: The connection
+##
+## packet_type: Request/Response/Push
+##
+## header: Record type, contains information about the S7Comm Plus Header
+##
+## data: Remaining data as string
+##
+## trailer: Record type, caontains information about the S7Comm Plus Trailer
+##
+event s7p_invoke%(c: connection, packet_type: string, sequence_number: count, session_id: count, header:S7CommPlus::S7PHeader, data: string, trailer: S7CommPlus::S7PTrailer%);
+
+## Generated for every S7Comm Plus Get Variable Substring packet seen on wire
+##
+## c: The connection
+##
+## packet_type: Request/Response/Push
+##
+## header: Record type, contains information about the S7Comm Plus Header
+##
+## data: Remaining data as string
+##
+## trailer: Record type, caontains information about the S7Comm Plus Trailer
+##
+event s7p_get_var_substr%(c: connection, packet_type: string, sequence_number: count, session_id: count, header:S7CommPlus::S7PHeader, data: string, trailer: S7CommPlus::S7PTrailer%);
+
+## Generated for every S7Comm Plus 'count' item (especially in Create Object) seen on wire
+##
+## c: The connection
+##
+## info: Record type, contains variable information about the item
+##
+## value: Value of the item
+##
+event s7p_item_value_count%(c: connection, info: S7CommPlus::S7PItemValueInfo, value: count%);
+
+## Generated for every S7Comm Plus 'int' item (especially in Create Object) seen on wire
+##
+## c: The connection
+##
+## info: Record type, contains variable information about the item
+##
+## value: Value of the item
+##
+event s7p_item_value_int%(c: connection, info: S7CommPlus::S7PItemValueInfo, value: int%);
+
+## Generated for every S7Comm Plus 'bool' item (especially in Create Object) seen on wire
+##
+## c: The connection
+##
+## info: Record type, contains variable information about the item
+##
+## value: Value of the item
+##
+event s7p_item_value_bool%(c: connection, info: S7CommPlus::S7PItemValueInfo, value: bool%);
+
+## Generated for every S7Comm Plus 'string' item (especially in Create Object) seen on wire
+##
+## c: The connection
+##
+## info: Record type, contains variable information about the item
+##
+## value: Value of the item
+##
+event s7p_item_value_string%(c: connection, info: S7CommPlus::S7PItemValueInfo, value: string%);
+
+## Generated for every S7Comm Plus 'double' item (especially in Create Object) seen on wire
+##
+## c: The connection
+##
+## info: Record type, contains variable information about the item
+##
+## value: Value of the item
+##
+event s7p_item_value_double%(c: connection, info: S7CommPlus::S7PItemValueInfo, value: double%);
+

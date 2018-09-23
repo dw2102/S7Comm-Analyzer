@@ -1,0 +1,112 @@
+#
+# Declared types for the ISO over TCP / S7Comm analyzer
+# 
+# Author: Dane Wullen
+# Date: 10.04.2018
+# Version: 0.1
+# 
+# This plugin is a part of a master's thesis written at Fachhochschule in Aachen (Aachen University of Applied Sciences)
+# 
+#
+
+module S7Comm;
+
+#S7 Header
+type S7Header:                      record;
+
+#Setup Communication
+type S7SetupCommParam:              record;
+
+# Variable types
+type S7AnyTypeItem:                 record;
+type S7DBTypeItem:                  record;
+type S7DBTypeSubitem:               record;
+type S71200SymTypeItem:             record;
+type S71200SymSubstructurItem:      record;
+type S7NCKTypeItem:                 record;
+type S7DriveAnyTypeItem:            record;
+
+
+# Read/Write Data Field
+type S7ReadWriteData:               record;
+
+# Upload Data Fields
+type S7JobStartUpload:              record;
+type S7AckDataStartUpload:          record;
+
+# Download Data Fields
+type S7JobRequestDownload:          record;
+type S7JobDownloadBlock:            record;
+type S7AckDataDownloadBlock:        record;
+type S7JobDownloadEnded:            record;
+
+# PLC Control Data Field
+type S7JobPLCControlBlock:          record;
+
+# Vector types to store the data
+type S7AnyTypeVector:	            vector;
+type S7DBTypeVector:	            vector;
+type S7DBTypeSubitemVector:         vector;
+type S71200SymTypeVector:           vector;
+type S71200SymSubstructurVector:    vector;
+type S7NCKTypeVector:               vector;
+type S7DriveESAnyTypeVector:        vector;
+
+###### UserData Types ######
+
+# Unknown Data
+type S7UDUnknownData:               record;
+
+# ReqDiagData 
+type S7UDReqDiagData:               record;
+type S7UDReqDiagItem:               record;
+type S7UDReqDiagItemVec:            vector;
+
+# VarTabData Request
+type S7UDVarTab1ReqItem:             record;
+type S7UDVarTab1ReqData:             record;
+type S7UDVarTab1ReqItemVec:          vector;
+
+# VarTabData Response
+type S7UDVarTab1ResItem:             record;
+type S7UDVarTab1ResData:             record;
+type S7UDVarTab1ResItemVec:          vector;
+
+
+# Cyclic Mem
+type S7UDCyclMemAny:                record;
+type S7UDCyclMemDB:                 record;
+type S7UDCyclMemSym:                record;
+type S7UDCyclMemNCK:                record;
+type S7UDCyclMemDrive:              record;
+
+type S7UDCyclMemDataAck:            record; # For "push" or "reponse" types
+type S7UDCycleMemDataAckVec:        vector; # Vector of S7ReadWriteData Items
+
+
+# Block list
+
+type S7UDBlockList:                 record;
+type S7UDBlockListType:             record;
+type S7UDBlockListItem:             record;
+type S7UDBlockListTypeItem:         record;
+type S7UDBlockInfoReq:              record;
+type S7UDBlockInfoRes:              record;
+type S7UDBlockListVec:              vector;
+type S7UDBlockListTypeVec:          vector;
+
+# PBC
+type S7UDPBC:                       record;
+
+# S7 Time
+type S7UDTime:                      record;
+
+
+module S7CommPlus;
+
+type S7PHeader:                     record;
+type S7PTrailer:                    record;
+
+type S7PItemValueInfo:              record;
+
+module GLOBAL;
