@@ -31,3 +31,9 @@ https://tools.ietf.org/html/rfc1006
 
 and RFC 905 (ISO Transport Protocol Specification)
 https://tools.ietf.org/html/rfc0905
+
+
+Disclaimer
+
+As I mentioned before, I have never tested this analyzer on in a production environment.
+Therefore, I do not take responsibility for any damage or loss caused by this piece of software.
