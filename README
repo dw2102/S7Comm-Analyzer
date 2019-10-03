@@ -3,7 +3,7 @@ Bro::Iso_Over_TCP
 =================================
 
 
-A plugin for the Bro NIDS, mainly to parse S7Comm protocol data traffic. 
+A plugin for the Zeek (Bro) NIDS, mainly to parse S7Comm protocol data traffic. 
 S7Comm is based on ISO over TCP (RFC1006), so the "main" analyzer is ISO over TCP. 
 The plugin will feature a really simple ISO over TCP analyzer and a S7Comm analyzer.
 
