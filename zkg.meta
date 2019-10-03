@@ -1,0 +1,9 @@
+[package]
+script_dir = scripts/
+build_command = ./configure && make
+description = Protocol parser for the Siemens S7Comm and S7CommPlus protocol.
+    Both parser are based on the Iso-Over-TCP protocol. Not all functions are covered
+    in this analyzer, it may not capture all of the packets.
+credits = D. Wullen <d.wullen@gmx.de>
+tags = s7comm, zeek plugin, s7commplus, siemens, zeek, protocol analyzer
+version = 0.1
