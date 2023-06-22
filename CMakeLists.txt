@@ -1,15 +1,21 @@
 
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 
-project(BroPluginIso_Over_TCP)
+project(ZeekPluginS7Comm)
 
-include(BroPlugin)
+include(ZeekPlugin)
 
-bro_plugin_begin(Bro Iso_Over_TCP)
-bro_plugin_bif(src/events.bif src/types.bif src/functions.bif)
-bro_plugin_cc(src/Plugin.cc src/Iso_Over_TCP.cc src/S7Comm.cc src/S7CommPlus.cc)
-bro_plugin_dist_files(README CHANGES COPYING VERSION)
-bro_plugin_end()
+zeek_plugin_begin(ICS S7Comm ${ZEEK_PLUGIN_BEGIN_OPTS})
+zeek_plugin_cc(src/Plugin.cc src/Iso_Over_TCP.cc src/S7Comm.cc src/S7CommPlus.cc)
+zeek_plugin_bif(src/events.bif src/types.bif)
+zeek_plugin_dist_files(README CHANGES COPYING VERSION)
+zeek_plugin_scripts(
+        scripts/__load__.zeek
+        scripts/__preload__.zeek
+        scripts/types.zeek
+        scripts/ICS/S7Comm/__load__.zeek
+)
+zeek_plugin_end()
 
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" VERSION LIMIT_COUNT 1)
 

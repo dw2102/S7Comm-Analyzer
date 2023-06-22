@@ -2,10 +2,10 @@
  * ISO over TCP / S7Comm protocol analyzer.
  * 
  * Based on the Wireshark dissector written by Thomas Wiens 
- * https://github.com/wireshark/wireshark/blob/5d99febe66e96b55a1defa58a906be254bad3a51/epan/dissectors/packet-s7comm.c,
- * https://github.com/wireshark/wireshark/blob/5d99febe66e96b55a1defa58a906be254bad3a51/epan/dissectors/packet-s7comm.h,
- * https://github.com/wireshark/wireshark/blob/fe219637a6748130266a0b0278166046e60a2d68/epan/dissectors/packet-s7comm_szl_ids.h,
- * https://github.com/wireshark/wireshark/blob/fe219637a6748130266a0b0278166046e60a2d68/epan/dissectors/packet-s7comm_szl_ids.c,
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm.h
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm.c
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm_szl_ids.h
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm_szl_ids.c
  * https://sourceforge.net/projects/s7commwireshark/
  * 
  * partially on the PoC S7Comm-Bro-Plugin written by György Miru
@@ -18,11 +18,11 @@
  * https://tools.ietf.org/html/rfc0905
  * 
  * Author: Dane Wullen
- * Date: 10.04.2018
- * Version: 1.0
+ * Date: 02.06.2023
+ * Version: 1.1
  * 
- * This plugin is a part of a master's thesis written at Fachhochschule in Aachen (Aachen University of Applied Sciences)
- * 
+ * This plugin was a part of a master's thesis written at Fachhochschule in Aachen (Aachen University of Applied Sciences)
+ * Rewritten for Zeek version 5.0.9
  */
 
 #include <vector>
@@ -34,7 +34,9 @@
 #include "events.bif.h"
 #include "types.bif.h"
 
-using namespace analyzer::S7_Comm;
+#include <iostream>
+
+using namespace zeek::analyzer::s7_comm;
 
 S7_Comm_Analyzer::S7_Comm_Analyzer(Connection* conn): tcp::TCP_ApplicationAnalyzer("S7_Comm", conn)
 {
@@ -119,7 +121,7 @@ void S7_Comm_Analyzer::ParseParameter(int len, const u_char* data, s7_header* he
 {
     u_char* function_code;
 
-    function_code = (u_char*) (data+offset);
+    function_code = (u_char*) (data + offset);
     offset += 1;
 
     switch(*function_code)
@@ -189,24 +191,22 @@ void S7_Comm_Analyzer::ParseParameter(int len, const u_char* data, s7_header* he
 
 void S7_Comm_Analyzer::ParseAck(s7_header* header)
 {
-    val_list* vl = new val_list();
+    Args vl;
     EventHandlerPtr ev = s7_ack;
-    vl->append(BuildConnVal());
-    vl->append(CreateHeader(header));
-    // Trigger event
-    ConnectionEvent(ev, vl);
+    IntrusivePtr v1{AdoptRef{}, CreateHeader(header)};
+    vl.emplace_back(ConnVal());
+    vl.emplace_back(v1);
+    EnqueueConnEvent(ev, std::move(vl));
 }
 
 void S7_Comm_Analyzer::ParseCpuService(s7_header* header, const u_char* data)
 {
-    // We don't know anything about the CPU Serivce packet, so we just trigger an event
-
-    val_list* vl = new val_list();
+    Args vl;
     EventHandlerPtr ev = s7_cpu_service;
-    vl->append(BuildConnVal());
-    vl->append(CreateHeader(header));
-    // Trigger event
-    ConnectionEvent(ev, vl);
+    IntrusivePtr v1{AdoptRef{}, CreateHeader(header)};
+    vl.emplace_back(ConnVal());
+    vl.emplace_back(v1);
+    EnqueueConnEvent(ev, std::move(vl));
 }
 
 void S7_Comm_Analyzer::ParseSetupCommunication(s7_header* header, const u_char* data)
@@ -216,8 +216,7 @@ void S7_Comm_Analyzer::ParseSetupCommunication(s7_header* header, const u_char* 
     u_int16* max_amq_calling;
     u_int16* max_amq_caller;
     u_int16* pdu_length;
-    val_list* vl;
-    RecordVal* rl;
+    Args vl;
     EventHandlerPtr ev;
 
     // Map everything over the data, increment offset...
@@ -230,19 +229,20 @@ void S7_Comm_Analyzer::ParseSetupCommunication(s7_header* header, const u_char* 
     pdu_length = (u_int16*)(data+offset);
     offset += 2;
 
-    vl = new val_list();
-    vl->append(BuildConnVal());
+    vl.emplace_back(ConnVal());
 
     // Set EventHandlerPtr to specific setup communication event
     if(header->msg_type == S7COMM_ROSCTR_JOB)
     {
         ev = s7_job_setup_communication;
-        vl->append(CreateHeader(header));
+        IntrusivePtr v1{AdoptRef{}, CreateHeader(header)};
+        vl.emplace_back(v1);
     }
     else if (header->msg_type == S7COMM_ROSCTR_ACK_DATA)
     {
         ev = s7_ackdata_setup_communication;
-        vl->append(CreateHeaderWithError(header));
+        IntrusivePtr v1{AdoptRef{}, CreateHeaderWithError(header)};
+        vl.emplace_back(v1);
     }
     else 
     {
@@ -251,16 +251,17 @@ void S7_Comm_Analyzer::ParseSetupCommunication(s7_header* header, const u_char* 
     }
 
     // Create new RecordVal "S7SetupCommParam"
-    rl = new RecordVal(BifType::Record::S7Comm::S7SetupCommParam);
-    rl->Assign(0, new Val(ntohs(*max_amq_calling), TYPE_COUNT));
-    rl->Assign(1, new Val(ntohs(*max_amq_caller), TYPE_COUNT));
-    rl->Assign(2, new Val(ntohs(*pdu_length), TYPE_COUNT));
+    RecordVal* rl = new RecordVal(BifType::Record::S7Comm::S7SetupCommParam);
+    rl->Assign(0, val_mgr->Count(ntohs(*max_amq_calling)));
+    rl->Assign(1, val_mgr->Count(ntohs(*max_amq_caller)));
+    rl->Assign(2, val_mgr->Count(ntohs(*pdu_length)));
 
     // Append RecordVal
-    vl->append(rl);
+    IntrusivePtr v2{AdoptRef{}, rl};
+    vl.emplace_back(v2);
 
     // Trigger event
-    ConnectionEvent(ev, vl);
+    EnqueueConnEvent(ev, std::move(vl));
 }
 
 void S7_Comm_Analyzer::ParseReadVariable(s7_header* header, const u_char* data)
@@ -273,9 +274,9 @@ void S7_Comm_Analyzer::ParseReadVariable(s7_header* header, const u_char* data)
     u_char* syntax_id;
 
     /*  Event variables */
-    RecordVal* item;
     EventHandlerPtr ev;
-    val_list* vl;
+    Args vl;
+    RecordVal* item;
 
     /* To calculate the length of the packet*/ 
     int old_offset, len;
@@ -298,26 +299,31 @@ void S7_Comm_Analyzer::ParseReadVariable(s7_header* header, const u_char* data)
 
             if(*var_spec_typ == 0x12 && *addr_length == 10 && *syntax_id == S7COMM_SYNTAXID_S7ANY)
             {
+                // item = make_intrusive<RecordVal>(BifType::Record::S7Comm::S7AnyTypeItem);
                 item = ParseAnyItem(data);
                 ev = s7_job_read_variable_any_type;
             }
             else if(*var_spec_typ == 0x12 && *addr_length >= 7 && *syntax_id == S7COMM_SYNTAXID_DBREAD)
             {
+                // item = make_intrusive<RecordVal>(BifType::Record::S7Comm::S7DBTypeItem);
                 item = ParseDbItem(data);
                 ev = s7_job_read_variable_db_type;
             }
             else if(*var_spec_typ == 0x12 && *addr_length >= 14 && *syntax_id == S7COMM_SYNTAXID_1200SYM)
             {
+                // item = make_intrusive<RecordVal>(BifType::Record::S7Comm::S71200SymTypeItem);
                 item = ParseSymItem(data);
                 ev = s7_job_read_variable_1200_sym_type;
             }
             else if(*var_spec_typ == 0x12 && *addr_length == 8 && *syntax_id == S7COMM_SYNTAXID_NCK)
             {
+                // item = make_intrusive<RecordVal>(BifType::Record::S7Comm::S7NCKTypeItem);
                 item = ParseNckItem(data);
                 ev = s7_job_read_variable_nck_type;
             }
             else if(*var_spec_typ == 0x12 && *addr_length == 10 && *syntax_id == S7COMM_SYNTAXID_DRIVEESANY)
             {
+                // item = make_intrusive<RecordVal>(BifType::Record::S7Comm::S7DriveAnyTypeItem);
                 item = ParseDriveAnyItem(data);
                 ev = s7_job_read_variable_drive_any_type;
             }
@@ -336,14 +342,13 @@ void S7_Comm_Analyzer::ParseReadVariable(s7_header* header, const u_char* data)
                 continue;
             }
             
-            vl = new val_list();
-            vl->append(BuildConnVal());
-            vl->append(CreateHeader(header));
-            vl->append(new Val((short)*item_count, TYPE_COUNT));
-            vl->append(new Val(i+1, TYPE_COUNT));
-            vl->append(item);
+            vl.emplace_back(ConnVal());
+            vl.emplace_back(IntrusivePtr {AdoptRef{}, CreateHeader(header)});
+            vl.emplace_back(val_mgr->Count((short)*item_count));
+            vl.emplace_back(val_mgr->Count(i+1));
+            vl.emplace_back(IntrusivePtr {AdoptRef{}, item});
 
-            ConnectionEvent(ev, vl);
+            EnqueueConnEvent(ev, std::move(vl));
 
             len = offset - old_offset;
             // If len is not a multiplier by 2 and this is not the last item, put 
@@ -360,11 +365,13 @@ void S7_Comm_Analyzer::ParseReadVariable(s7_header* header, const u_char* data)
         // field in the parameter section, so directly parse
         // the data field
 
+        bool isNCK = false;
+
         for(int i = 0; i < (short)*item_count; i++)
         {
             item = ParseReadWriteData(data, (short)*item_count-i);
-            
-            if(item->Type() == BifType::Record::S7Comm::S7NCKTypeItem)
+
+            if(item->GetType() == BifType::Record::S7Comm::S7NCKTypeItem)
             {
                 ev = s7_ackdata_read_data_nck;  
             }
@@ -373,20 +380,19 @@ void S7_Comm_Analyzer::ParseReadVariable(s7_header* header, const u_char* data)
                 ev = s7_ackdata_read_data;
             }
 
-            vl = new val_list();
-            vl->append(BuildConnVal());
-            vl->append(CreateHeaderWithError(header));
-            vl->append(new Val((short)*item_count, TYPE_COUNT));
-            vl->append(new Val(i+1, TYPE_COUNT));
-            vl->append(item);
-            ConnectionEvent(ev, vl);
+            vl.emplace_back(ConnVal());
+            vl.emplace_back(IntrusivePtr {AdoptRef{}, CreateHeaderWithError(header)});
+            vl.emplace_back(val_mgr->Count((short)*item_count));
+            vl.emplace_back(val_mgr->Count(i+1));
+            vl.emplace_back(IntrusivePtr {AdoptRef{}, item});
+            EnqueueConnEvent(ev, std::move(vl));
         }
     }
 }
 
 void S7_Comm_Analyzer::ParseWriteVariable(s7_header* header, const u_char* data)
 {
-    /* Parameter item count*/
+     /* Parameter item count*/
     u_char* item_count;
 
     /* Lookahead variables */
@@ -395,10 +401,9 @@ void S7_Comm_Analyzer::ParseWriteVariable(s7_header* header, const u_char* data)
     u_char* syntax_id;
 
     /*  Event variables */
-    RecordVal* item;
     EventHandlerPtr ev;
-    val_list* vl;
-    vector<RecordVal*> item_vec;
+    Args vl;
+    std::vector<RecordVal*> item_vec;
     RecordVal* data_item;
 
     /* To calculate the length of the packet*/ 
@@ -472,23 +477,23 @@ void S7_Comm_Analyzer::ParseWriteVariable(s7_header* header, const u_char* data)
         {
             data_item = ParseReadWriteData(data,(short)*item_count-1);
 
-            if(item_vec[i] != NULL && item_vec[i]->Type() == BifType::Record::S7Comm::S7AnyTypeItem)
+            if(item_vec[i] != NULL && item_vec[i]->GetType() == BifType::Record::S7Comm::S7AnyTypeItem)
             {
                 ev = s7_job_write_variable_any_type;
             }
-            else if(item_vec[i] != NULL && item_vec[i]->Type() == BifType::Record::S7Comm::S7DBTypeItem)
+            else if(item_vec[i] != NULL && item_vec[i]->GetType() == BifType::Record::S7Comm::S7DBTypeItem)
             {
                 ev = s7_job_write_variable_db_type;
             }
-            else if(item_vec[i] != NULL && item_vec[i]->Type() == BifType::Record::S7Comm::S71200SymTypeItem)
+            else if(item_vec[i] != NULL && item_vec[i]->GetType() == BifType::Record::S7Comm::S71200SymTypeItem)
             {
                 ev = s7_job_write_variable_1200_sym_type;
             }
-            else if(item_vec[i] != NULL && item_vec[i]->Type() == BifType::Record::S7Comm::S7NCKTypeItem)
+            else if(item_vec[i] != NULL && item_vec[i]->GetType() == BifType::Record::S7Comm::S7NCKTypeItem)
             {
                 ev = s7_job_write_variable_nck_type;
             }
-            else if(item_vec[i] != NULL && item_vec[i]->Type() == BifType::Record::S7Comm::S7DriveAnyTypeItem)
+            else if(item_vec[i] != NULL && item_vec[i]->GetType() == BifType::Record::S7Comm::S7DriveAnyTypeItem)
             {
                 ev = s7_job_write_variable_drive_any_type;
             }
@@ -497,14 +502,14 @@ void S7_Comm_Analyzer::ParseWriteVariable(s7_header* header, const u_char* data)
                 // Skip this data because of unknown spec_type
                 continue;
             }
-            vl = new val_list();
-            vl->append((BuildConnVal()));
-            vl->append(CreateHeader(header));
-            vl->append(new Val((short)*item_count, TYPE_COUNT));
-            vl->append(new Val(i+1, TYPE_COUNT));
-            vl->append(item_vec[i]);
-            vl->append(data_item);
-            ConnectionEvent(ev, vl);
+
+            vl.emplace_back((ConnVal()));
+            vl.emplace_back(IntrusivePtr {AdoptRef{}, CreateHeader(header)});
+            vl.emplace_back(val_mgr->Count((short)*item_count));
+            vl.emplace_back(val_mgr->Count(i+1));
+            vl.emplace_back(IntrusivePtr {AdoptRef{}, item_vec[i]});
+            vl.emplace_back(IntrusivePtr {AdoptRef{}, data_item});
+            EnqueueConnEvent(ev, std::move(vl));
         }
     }
     else if(header->msg_type == S7COMM_ROSCTR_ACK_DATA)
@@ -512,13 +517,12 @@ void S7_Comm_Analyzer::ParseWriteVariable(s7_header* header, const u_char* data)
         ev = s7_ackdata_write_data;
         for(int i = 0; i < (short)*item_count; i++)
         {
-            vl = new val_list();
-            vl->append((BuildConnVal()));
-            vl->append(CreateHeaderWithError(header));
-            vl->append(new Val((short)*item_count, TYPE_COUNT));
-            vl->append(new Val(i+1, TYPE_COUNT));
-            vl->append(new Val(ParseAckDataWriteData(data), TYPE_COUNT));
-            ConnectionEvent(ev, vl);
+            vl.emplace_back((ConnVal()));
+            vl.emplace_back(IntrusivePtr {AdoptRef{}, CreateHeaderWithError(header)});
+            vl.emplace_back(val_mgr->Count((short)*item_count));
+            vl.emplace_back(val_mgr->Count(i+1));
+            vl.emplace_back(val_mgr->Count(ParseAckDataWriteData(data)));
+            EnqueueConnEvent(ev, std::move(vl));
         }
     }
 }
@@ -535,15 +539,14 @@ void S7_Comm_Analyzer::ParseStartUpload(s7_header* header, const u_char* data)
     /*  Event variables */
     RecordVal* item;
     EventHandlerPtr ev;
-    val_list* vl;
+    Args vl;
 
     func_status = (u_char*) (data+offset);
     offset += 3; // 1 + skip 2 unknown bytes
     upload_id = (u_int32*) (data+offset);
     offset += 4;
 
-    vl = new val_list();
-    vl->append(BuildConnVal());
+    vl.emplace_back(ConnVal());
 
     if(header->msg_type == S7COMM_ROSCTR_JOB)
     {
@@ -553,15 +556,15 @@ void S7_Comm_Analyzer::ParseStartUpload(s7_header* header, const u_char* data)
         offset += (short)*filename_length;
 
         item = new RecordVal(BifType::Record::S7Comm::S7JobStartUpload);
-        item->Assign(0, new Val((short)*func_status, TYPE_COUNT));
-        item->Assign(1, new Val(ntohl(*upload_id), TYPE_COUNT));
-        item->Assign(2, new Val((short)*filename_length, TYPE_COUNT));
+        item->Assign(0, val_mgr->Count((short)*func_status));
+        item->Assign(1, val_mgr->Count(ntohl(*upload_id)));
+        item->Assign(2, val_mgr->Count((short)*filename_length));
         item->Assign(3, new StringVal(filename));
 
         ev = s7_job_start_upload;
         
-        vl->append(CreateHeader(header));
-        vl->append(item);
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeader(header)});
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, item});
     }
     else if(header->msg_type == S7COMM_ROSCTR_ACK_DATA)
     {
@@ -571,18 +574,18 @@ void S7_Comm_Analyzer::ParseStartUpload(s7_header* header, const u_char* data)
         offset += (short)*blockstring_length;
 
         item = new RecordVal(BifType::Record::S7Comm::S7AckDataStartUpload);
-        item->Assign(0, new Val((short)*func_status, TYPE_COUNT));
-        item->Assign(1, new Val(ntohl(*upload_id), TYPE_COUNT));
-        item->Assign(2, new Val((short)*blockstring_length, TYPE_COUNT));
+        item->Assign(0, val_mgr->Count((short)*func_status));
+        item->Assign(1, val_mgr->Count(ntohl(*upload_id)));
+        item->Assign(2, val_mgr->Count((short)*blockstring_length));
         item->Assign(3, new StringVal(blockstring));
 
         ev = s7_ackdata_start_upload;
 
-        vl->append(CreateHeaderWithError(header));
-        vl->append(item);
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeaderWithError(header)});
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, item});
     }
 
-    ConnectionEvent(ev, vl);
+    EnqueueConnEvent(ev, std::move(vl));
 }
 
 void S7_Comm_Analyzer::ParseUpload(s7_header* header, const u_char* data)
@@ -594,10 +597,9 @@ void S7_Comm_Analyzer::ParseUpload(s7_header* header, const u_char* data)
 
     /*  Event variables */
     EventHandlerPtr ev;
-    val_list* vl;
+    Args vl;
 
-    vl = new val_list();
-    vl->append(BuildConnVal());
+    vl.emplace_back(ConnVal());
 
     func_status = (u_char*) (data + offset);
     offset += 1;
@@ -610,9 +612,9 @@ void S7_Comm_Analyzer::ParseUpload(s7_header* header, const u_char* data)
 
         ev = s7_job_upload;
 
-        vl->append(CreateHeader(header));
-        vl->append(new Val((short)*func_status, TYPE_COUNT));
-        vl->append(new Val(ntohl(*upload_id), TYPE_COUNT));
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeader(header)});
+        vl.emplace_back(val_mgr->Count((short)*func_status));
+        vl.emplace_back(val_mgr->Count(ntohl(*upload_id)));
     }
     else if(header->msg_type == S7COMM_ROSCTR_ACK_DATA)
     {
@@ -623,13 +625,13 @@ void S7_Comm_Analyzer::ParseUpload(s7_header* header, const u_char* data)
 
         ev = s7_ackdata_upload;
 
-        vl->append(CreateHeaderWithError(header));
-        vl->append(new Val((short)*func_status, TYPE_COUNT));
-        vl->append(new Val(ntohs(*data_length), TYPE_COUNT));
-        vl->append(new StringVal(upload_data));
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeaderWithError(header)});
+        vl.emplace_back(val_mgr->Count((short)*func_status));
+        vl.emplace_back(val_mgr->Count(ntohs(*data_length)));
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(upload_data)});
     }
     
-    ConnectionEvent(ev, vl);
+    EnqueueConnEvent(ev, std::move(vl));
 }
 
 void S7_Comm_Analyzer::ParseEndUpload(s7_header* header, const u_char* data)
@@ -640,10 +642,9 @@ void S7_Comm_Analyzer::ParseEndUpload(s7_header* header, const u_char* data)
 
     /*  Event variables */
     EventHandlerPtr ev;
-    val_list* vl;
+    Args vl;
 
-    vl = new val_list();
-    vl->append(BuildConnVal());
+    vl.emplace_back(ConnVal());
 
     if(header->msg_type == S7COMM_ROSCTR_JOB)
     {
@@ -656,20 +657,20 @@ void S7_Comm_Analyzer::ParseEndUpload(s7_header* header, const u_char* data)
 
         ev = s7_job_end_upload;
 
-        vl->append(CreateHeader(header));
-        vl->append(new Val((short)*func_status, TYPE_COUNT));
-        vl->append(new Val(ntohs(*error_code), TYPE_COUNT));
-        vl->append(new Val(ntohl(*upload_id), TYPE_COUNT));
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeader(header)});
+        vl.emplace_back(val_mgr->Count((short)*func_status));
+        vl.emplace_back(val_mgr->Count(ntohs(*error_code)));
+        vl.emplace_back(val_mgr->Count(ntohl(*upload_id)));
     }
     else if(header->msg_type == S7COMM_ROSCTR_ACK_DATA)
     {
         // No data in parameter or data section, just call an event
         ev = s7_ackdata_end_upload;
 
-        vl->append(CreateHeaderWithError(header));
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeaderWithError(header)});
     }
 
-    ConnectionEvent(ev, vl);
+    EnqueueConnEvent(ev, std::move(vl));
 }
 
 void S7_Comm_Analyzer::ParseRequestDownload(s7_header* header, const u_char* data)
@@ -684,10 +685,9 @@ void S7_Comm_Analyzer::ParseRequestDownload(s7_header* header, const u_char* dat
     /*  Event variables */
     RecordVal* item;
     EventHandlerPtr ev;
-    val_list* vl;
+    Args vl;
 
-    vl = new val_list();
-    vl->append(BuildConnVal());
+    vl.emplace_back(ConnVal());
 
     if(header->msg_type == S7COMM_ROSCTR_JOB)
     {
@@ -710,23 +710,23 @@ void S7_Comm_Analyzer::ParseRequestDownload(s7_header* header, const u_char* dat
         ev = s7_job_request_download;
 
         item = new RecordVal(BifType::Record::S7Comm::S7JobRequestDownload);
-        item->Assign(0, new Val((short)*func_status, TYPE_COUNT));
-        item->Assign(1, new Val((short)*filename_length, TYPE_COUNT));
+        item->Assign(0, val_mgr->Count((short)*func_status));
+        item->Assign(1, val_mgr->Count((short)*filename_length));
         item->Assign(2, new StringVal(filename));
         item->Assign(3, new StringVal(length_load_memory));
         item->Assign(4, new StringVal(length_mc7_code));
 
-        vl->append(CreateHeader(header));
-        vl->append(item);
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeader(header)});
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, item});
     }
     else if(header->msg_type == S7COMM_ROSCTR_ACK_DATA)
     {   
         ev = s7_ackdata_request_download;
 
-        vl->append(CreateHeaderWithError(header));
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeaderWithError(header)});
     }
 
-    ConnectionEvent(ev, vl);
+    EnqueueConnEvent(ev, std::move(vl));
 }
 
 void S7_Comm_Analyzer::ParseDownloadBlock(s7_header* header, const u_char* data)
@@ -738,10 +738,9 @@ void S7_Comm_Analyzer::ParseDownloadBlock(s7_header* header, const u_char* data)
     /*  Event variables */
     RecordVal* item;
     EventHandlerPtr ev;
-    val_list* vl;
+    Args vl;
 
-    vl = new val_list();
-    vl->append(BuildConnVal());
+    vl.emplace_back(ConnVal());
 
     if(header->msg_type == S7COMM_ROSCTR_JOB)
     {
@@ -755,13 +754,13 @@ void S7_Comm_Analyzer::ParseDownloadBlock(s7_header* header, const u_char* data)
         ev = s7_job_download_block;
         
         item = new RecordVal(BifType::Record::S7Comm::S7JobDownloadBlock);
-        item->Assign(0, new Val((short)*func_status, TYPE_COUNT));
-        item->Assign(1, new Val((short)*filename_length, TYPE_COUNT));
+        item->Assign(0, val_mgr->Count((short)*func_status));
+        item->Assign(1, val_mgr->Count((short)*filename_length));
         item->Assign(2, new StringVal(filename));
         offset += (short)*filename_length;
 
-        vl->append(CreateHeader(header));
-        vl->append(item);
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeader(header)});
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, item});
 
     }
     else if(header->msg_type == S7COMM_ROSCTR_ACK_DATA)
@@ -771,12 +770,12 @@ void S7_Comm_Analyzer::ParseDownloadBlock(s7_header* header, const u_char* data)
 
         ev = s7_ackdata_download_block;
 
-        vl->append(CreateHeaderWithError(header));
-        vl->append(new Val((short)*func_status, TYPE_COUNT));
-        vl->append(ParseAckDataDownloadData(data));
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeaderWithError(header)});
+        vl.emplace_back(val_mgr->Count((short)*func_status));
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseAckDataDownloadData(data)});
     }
 
-    ConnectionEvent(ev, vl);
+    EnqueueConnEvent(ev, std::move(vl));
 }
 
 void S7_Comm_Analyzer::ParseDownloadEnded(s7_header* header, const u_char* data)
@@ -789,10 +788,9 @@ void S7_Comm_Analyzer::ParseDownloadEnded(s7_header* header, const u_char* data)
     /*  Event variables */
     RecordVal* item;
     EventHandlerPtr ev;
-    val_list* vl;
+    Args vl;
 
-    vl = new val_list();
-    vl->append(BuildConnVal());
+    vl.emplace_back(ConnVal());
 
     if(header->msg_type == S7COMM_ROSCTR_JOB)
     {
@@ -807,22 +805,22 @@ void S7_Comm_Analyzer::ParseDownloadEnded(s7_header* header, const u_char* data)
         ev = s7_job_download_ended;
         
         item = new RecordVal(BifType::Record::S7Comm::S7JobDownloadEnded);
-        item->Assign(0, new Val((short)*func_status, TYPE_COUNT));
-        item->Assign(1, new Val(ntohs(*error_code), TYPE_COUNT));
-        item->Assign(2, new Val((short)*filename_length, TYPE_COUNT));
+        item->Assign(0, val_mgr->Count((short)*func_status));
+        item->Assign(1, val_mgr->Count(ntohs(*error_code)));
+        item->Assign(2, val_mgr->Count((short)*filename_length));
         item->Assign(3, new StringVal(filename));
 
-        vl->append(CreateHeader(header));
-        vl->append(item);
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeader(header)});
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, item});
 
     }
     else if(header->msg_type == S7COMM_ROSCTR_ACK_DATA)
     {
         ev = s7_ackdata_download_ended;
-        vl->append(CreateHeaderWithError(header));
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeaderWithError(header)});
     }
 
-    ConnectionEvent(ev, vl);
+    EnqueueConnEvent(ev, std::move(vl));
 }
 
 void S7_Comm_Analyzer::ParsePLCControl(s7_header* header, const u_char* data)
@@ -846,10 +844,9 @@ void S7_Comm_Analyzer::ParsePLCControl(s7_header* header, const u_char* data)
     RecordVal* item;
     VectorVal* strings_vec;
     EventHandlerPtr ev;
-    val_list* vl;
+    Args vl;
 
-    vl = new val_list();
-    vl->append(BuildConnVal());
+    vl.emplace_back(ConnVal());
 
     if(header->msg_type == S7COMM_ROSCTR_JOB)
     {
@@ -874,12 +871,11 @@ void S7_Comm_Analyzer::ParsePLCControl(s7_header* header, const u_char* data)
         if(!idx)
         {
             Weird("Unknown PLC Control service type");
-            delete vl;
             return;
         }
 
        ev = s7_job_plc_control;
-       strings_vec = new VectorVal(internal_type("string_vec")->AsVectorType());
+       strings_vec = new VectorVal(zeek::id::string_vec);
 
        /**
         * Decode service parameter
@@ -896,7 +892,7 @@ void S7_Comm_Analyzer::ParsePLCControl(s7_header* header, const u_char* data)
 
                for(int i = 0; i < (short)*count; i++)
                {
-                   strings_vec->Assign(strings_vec->Size(), new StringVal(HexToASCII((data + param_block_offset), 8)));
+                   strings_vec->Assign(strings_vec->Size(), IntrusivePtr{AdoptRef{}, new StringVal(HexToASCII((data + param_block_offset), 8))});
                    param_block_offset += 8;
                }
 
@@ -911,11 +907,11 @@ void S7_Comm_Analyzer::ParsePLCControl(s7_header* header, const u_char* data)
            {
                if(!ntohs(*param_length))
                {
-                   strings_vec->Assign(strings_vec->Size(), new StringVal("")); //Just to make sure it is initialized
+                   strings_vec->Assign(strings_vec->Size(), IntrusivePtr{AdoptRef{}, new StringVal("")}); //Just to make sure it is initialized
                }
                else
                {
-                   strings_vec->Assign(strings_vec->Size(), new StringVal(HexToASCII((data + param_block_offset), ntohs(*param_length))));
+                   strings_vec->Assign(strings_vec->Size(), IntrusivePtr{AdoptRef{}, new StringVal(HexToASCII((data + param_block_offset), ntohs(*param_length)))});
                }
 
                // No blocks nor fields
@@ -1048,19 +1044,19 @@ void S7_Comm_Analyzer::ParsePLCControl(s7_header* header, const u_char* data)
            }
        }
 
-       vl->append(CreateHeader(header));
-       vl->append(new StringVal(plc_service));
-       vl->append(new Val(blocks, TYPE_COUNT));
-       vl->append(new Val(fields, TYPE_COUNT));
-       vl->append(strings_vec);
+       vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeader(header)});
+       vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(plc_service)});
+       vl.emplace_back(val_mgr->Count(blocks));
+       vl.emplace_back(val_mgr->Count(fields));
+       vl.emplace_back(IntrusivePtr{AdoptRef{}, strings_vec});
     }
     else if(header->msg_type == S7COMM_ROSCTR_ACK_DATA)
     {
         ev = s7_ackdata_plc_control;
-        vl->append(CreateHeaderWithError(header));
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeaderWithError(header)});
     }
 
-    ConnectionEvent(ev, vl);
+    EnqueueConnEvent(ev, std::move(vl));
 }
 
 void S7_Comm_Analyzer::ParsePLCStop(s7_header* header, const u_char* data)
@@ -1070,10 +1066,9 @@ void S7_Comm_Analyzer::ParsePLCStop(s7_header* header, const u_char* data)
 
     /*  Event variables */
     EventHandlerPtr ev;
-    val_list* vl;
+    Args vl;
 
-    vl = new val_list();
-    vl->append(BuildConnVal());
+    vl.emplace_back(ConnVal());
 
     if(header->msg_type == S7COMM_ROSCTR_JOB)
     {
@@ -1086,16 +1081,16 @@ void S7_Comm_Analyzer::ParsePLCStop(s7_header* header, const u_char* data)
 
         ev = s7_job_plc_stop;
 
-        vl->append(CreateHeader(header));
-        vl->append(new StringVal(filename));
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeader(header)});
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(filename)});
     }
     else if(header->msg_type == S7COMM_ROSCTR_ACK_DATA)
     {
         ev = s7_ackdata_plc_stop;
-        vl->append(CreateHeaderWithError(header));
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeaderWithError(header)});
     }
 
-    ConnectionEvent(ev, vl);
+    EnqueueConnEvent(ev, std::move(vl));
 }
 
 void S7_Comm_Analyzer::ParseUDParameter(s7_header* header, int len, const u_char* data, bool orig)
@@ -1216,15 +1211,14 @@ void S7_Comm_Analyzer::ParseUDParameter(s7_header* header, int len, const u_char
 void S7_Comm_Analyzer::ParseUDProgSubfunction(s7_header* header, const u_char* data, short subfunction, short type)
 {
     // Event variables
-    val_list* vl;
+    Args vl;
     EventHandlerPtr ev;
 
     std::string packet_type = GetPacketType(type);
 
-    vl = new val_list();
-    vl->append(BuildConnVal());
-    vl->append(CreateHeader(header));
-    vl->append(new StringVal(packet_type));
+    vl.emplace_back(ConnVal());
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeader(header)});
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(packet_type)});
 
     switch(subfunction)
     {
@@ -1234,13 +1228,13 @@ void S7_Comm_Analyzer::ParseUDProgSubfunction(s7_header* header, const u_char* d
             
             if(type != S7COMM_UD_TYPE_PUSH)
             {
-                vl->append(ParseUDReqDiagData(subfunction, data));
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDReqDiagData(subfunction, data)});
             }
             else
             {
                 ev = s7_ud_prog_unknown;
-                vl->append(new Val(subfunction, TYPE_COUNT));
-                vl->append(ParseUDUnknownData(data));
+                vl.emplace_back(val_mgr->Count(subfunction));
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDUnknownData(data)});
             }
             break;
         }
@@ -1249,13 +1243,13 @@ void S7_Comm_Analyzer::ParseUDProgSubfunction(s7_header* header, const u_char* d
             if(type != S7COMM_UD_TYPE_PUSH)
             {
                 ev = s7_ud_prog_reqdiagdata2;
-                vl->append(ParseUDReqDiagData(subfunction, data));
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDReqDiagData(subfunction, data)});
             }
             else
             {
                 ev = s7_ud_prog_unknown;
-                vl->append(new Val(subfunction, TYPE_COUNT));
-                vl->append(ParseUDUnknownData(data));
+                vl.emplace_back(val_mgr->Count(subfunction));
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDUnknownData(data)});
             }
             break;
         }
@@ -1269,20 +1263,20 @@ void S7_Comm_Analyzer::ParseUDProgSubfunction(s7_header* header, const u_char* d
                 case S7COMM_UD_SUBF_PROG_VARTAB_TYPE_REQ:
                 {
                     ev = s7_ud_prog_vartab1_request;
-                    vl->append(ParseUDVarTab1Request(subfunction, data));
+                    vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDVarTab1Request(subfunction, data)});
                     break;
                 }
                 case S7COMM_UD_SUBF_PROG_VARTAB_TYPE_RES:
                 {
                     ev = s7_ud_prog_vartab1_response;
-                    vl->append(ParseUDVarTab1Response(subfunction, data));
+                    vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDVarTab1Response(subfunction, data)});
                     break;
                 }
                 default:
                 {
                     ev = s7_ud_prog_unknown;
-                    vl->append(new Val(subfunction, TYPE_COUNT));
-                    vl->append(ParseUDUnknownData(data));
+                    vl.emplace_back(val_mgr->Count(subfunction));
+                    vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDUnknownData(data)});
                     break;
                 }
             }
@@ -1291,27 +1285,26 @@ void S7_Comm_Analyzer::ParseUDProgSubfunction(s7_header* header, const u_char* d
         default:
         {
             ev = s7_ud_prog_unknown;
-            vl->append(new Val(subfunction, TYPE_COUNT));
-            vl->append(ParseUDUnknownData(data));
+            vl.emplace_back(val_mgr->Count(subfunction));
+            vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDUnknownData(data)});
             break;
         }
     }
-    ConnectionEvent(ev, vl);
+    EnqueueConnEvent(ev, std::move(vl));
 }
 
 void S7_Comm_Analyzer::ParseUDCyclSubfunction(s7_header* header, const u_char* data, short subfunction, short type)
 {
     // Event variables
-    val_list* vl;
+    Args vl;
     EventHandlerPtr ev;
     bool known = false;
 
     std::string packet_type = GetPacketType(type);
 
-    vl = new val_list();
-    vl->append(BuildConnVal());
-    vl->append(CreateHeader(header));
-    vl->append(new StringVal(packet_type));
+    vl.emplace_back(ConnVal());
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeader(header)});
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(packet_type)});
 
     switch(subfunction)
     {
@@ -1332,33 +1325,32 @@ void S7_Comm_Analyzer::ParseUDCyclSubfunction(s7_header* header, const u_char* d
         case S7COMM_UD_SUBF_CYCLIC_UNSUBSCRIBE:
         {
             ev = s7_ud_cycl_unsub;
-            vl->append(new Val(subfunction, TYPE_COUNT));
-            vl->append(ParseUDUnknownData(data));
+            vl.emplace_back(val_mgr->Count(subfunction));
+            vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDUnknownData(data)});
             break;
         }
     }
 
     if(!known)
     {
-        ConnectionEvent(ev, vl);
+        EnqueueConnEvent(ev, std::move(vl));
     }
 }
 
 void S7_Comm_Analyzer::ParseUDBlockSubfunction(s7_header* header, const u_char* data, short subfunction, short type)
 {
-    // Event variables
-    val_list* vl = 0;
-    EventHandlerPtr ev = 0;
+     // Event variables
+    Args vl;
+    EventHandlerPtr ev;
 
     // Lookahead transportsize
     short return_value = 0;
     short transport_size = 0;
     std::string packet_type = GetPacketType(type);
 
-    vl = new val_list();
-    vl->append(BuildConnVal());
-    vl->append(CreateHeader(header));
-    vl->append(new StringVal(packet_type));
+    vl.emplace_back(ConnVal());
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeader(header)});
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(packet_type)});
 
     // Lookahead these 2 bytes
     return_value = (short)*(u_char*) (data + offset);
@@ -1371,13 +1363,13 @@ void S7_Comm_Analyzer::ParseUDBlockSubfunction(s7_header* header, const u_char* 
             if(type == S7COMM_UD_TYPE_RES)
             {
                 ev = s7_ud_block_list_res;
-                vl->append(ParseUDBlockListType(subfunction, data));
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDBlockListType(subfunction, data)});
             }
             else 
             {
                 ev = s7_ud_block_unknown;
-                vl->append(new Val(subfunction, TYPE_COUNT));
-                vl->append(ParseUDUnknownData(data));
+                vl.emplace_back(val_mgr->Count(subfunction));
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDUnknownData(data)});
             }
             break;
         }
@@ -1388,16 +1380,16 @@ void S7_Comm_Analyzer::ParseUDBlockSubfunction(s7_header* header, const u_char* 
                 if(transport_size != S7COMM_DATA_TRANSPORT_SIZE_NULL)
                 {
                     ev = s7_ud_block_listtype_req;
-                    vl->append(new Val((short)*(u_char*)(data + offset), TYPE_COUNT));
-                    vl->append(new Val((short)*(u_char*)(data + offset + 1), TYPE_COUNT));
-                    vl->append(new Val(ntohs(*(u_int16*)(data + offset + 2)), TYPE_COUNT));
-                    vl->append(new StringVal(HexToASCII((data + offset + 4), ntohs(*(u_int16*)(data + offset + 2)))));
+                    vl.emplace_back(val_mgr->Count((short)*(u_char*)(data + offset)));
+                    vl.emplace_back(val_mgr->Count((short)*(u_char*)(data + offset + 1)));
+                    vl.emplace_back(val_mgr->Count(ntohs(*(u_int16*)(data + offset + 2))));
+                    vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(HexToASCII((data + offset + 4), ntohs(*(u_int16*)(data + offset + 2))))});
                 }
                 else // No ASCII data, just plain hex output
                 {
                     ev = s7_ud_block_unknown;
-                    vl->append(new Val(subfunction, TYPE_COUNT));
-                    vl->append(ParseUDUnknownData(data));
+                    vl.emplace_back(val_mgr->Count(subfunction));
+                    vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDUnknownData(data)});
                 }
             }
             else if(type == S7COMM_UD_TYPE_RES)
@@ -1405,20 +1397,20 @@ void S7_Comm_Analyzer::ParseUDBlockSubfunction(s7_header* header, const u_char* 
                 if(transport_size != S7COMM_DATA_TRANSPORT_SIZE_NULL)
                 {
                     ev = s7_ud_block_listtype_res;
-                    vl->append(ParseUDBlockListType(subfunction, data));
+                    vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDBlockListType(subfunction, data)});
                 }
                 else // No ASCII data, just plain hex output
                 {
                     ev = s7_ud_block_unknown;
-                    vl->append(new Val(subfunction, TYPE_COUNT));
-                    vl->append(ParseUDUnknownData(data));
+                    vl.emplace_back(val_mgr->Count(subfunction));
+                    vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDUnknownData(data)});
                 }
             }
             else
             {
                 ev = s7_ud_block_unknown;
-                vl->append(new Val(subfunction, TYPE_COUNT));
-                vl->append(ParseUDUnknownData(data));
+                vl.emplace_back(val_mgr->Count(subfunction));
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDUnknownData(data)});
             }
             break;
         }
@@ -1429,13 +1421,13 @@ void S7_Comm_Analyzer::ParseUDBlockSubfunction(s7_header* header, const u_char* 
                 if(transport_size != S7COMM_DATA_TRANSPORT_SIZE_NULL)
                 {
                     ev = s7_ud_block_blockinfo_req;
-                    vl->append(ParseUDBlockBlockInfoReq(subfunction, data));
+                    vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDBlockBlockInfoReq(subfunction, data)});
                 }
                 else
                 {
                     ev = s7_ud_block_unknown;
-                    vl->append(new Val(subfunction, TYPE_COUNT));
-                    vl->append(ParseUDUnknownData(data));
+                    vl.emplace_back(val_mgr->Count(subfunction));
+                    vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDUnknownData(data)});
                 }
             }
             else if(type == S7COMM_UD_TYPE_RES)
@@ -1443,38 +1435,37 @@ void S7_Comm_Analyzer::ParseUDBlockSubfunction(s7_header* header, const u_char* 
                 if(return_value == S7COMM_ITEM_RETVAL_DATA_OK)
                 {
                     ev = s7_ud_block_blockinfo_res;
-                    vl->append(ParseUDBlockBlockInfoRes(subfunction, data));
+                    vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDBlockBlockInfoRes(subfunction, data)});
                 }
                 else
                 {
                     ev = s7_ud_block_unknown;
-                    vl->append(new Val(subfunction, TYPE_COUNT));
-                    vl->append(ParseUDUnknownData(data));
+                    vl.emplace_back(val_mgr->Count(subfunction));
+                    vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDUnknownData(data)});
                 }
             }
             else
             {
                 ev = s7_ud_block_unknown;
-                vl->append(new Val(subfunction, TYPE_COUNT));
-                vl->append(ParseUDUnknownData(data));
+                vl.emplace_back(val_mgr->Count(subfunction));
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDUnknownData(data)});
             }
             break;
         } 
     }
-    ConnectionEvent(ev, vl);
+    EnqueueConnEvent(ev, std::move(vl));
 }
 
 void S7_Comm_Analyzer::ParseUDCPUSubfunction(s7_header* header, const u_char* data, short subfunction, short data_ref_num, bool last_data, short type)
 {
-    val_list* vl;
+    Args vl;
     EventHandlerPtr ev;
 
     std::string packet_type = GetPacketType(type);
 
-    vl = new val_list();
-    vl->append(BuildConnVal());
-    vl->append(CreateHeader(header));
-    vl->append(new StringVal(packet_type));
+    vl.emplace_back(ConnVal());
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeader(header)});
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(packet_type)});
 
     switch(subfunction)
     {
@@ -1482,47 +1473,46 @@ void S7_Comm_Analyzer::ParseUDCPUSubfunction(s7_header* header, const u_char* da
         {
             offset += 4; // Skip usual 4 byte data header for now...
             ev = s7_ud_cpu_read_szl;
-            vl->append(new StringVal(HexToString(data + offset, 2)));
+            vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(HexToString(data + offset, 2))});
             offset += 2;
-            vl->append(new StringVal(HexToString(data + offset, 2)));
+            vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(HexToString(data + offset, 2))});
             offset += 2;
             break;
         }
         default:
         {
             ev = s7_ud_cpu_unknown;
-            vl->append(new Val(subfunction, TYPE_COUNT));
-            vl->append(ParseUDUnknownData(data));
+            vl.emplace_back(val_mgr->Count(subfunction));
+            vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDUnknownData(data)});
             break;
         }
     }
 
-    ConnectionEvent(ev, vl);
+    EnqueueConnEvent(ev, std::move(vl));
 }
 
 void S7_Comm_Analyzer::ParseUDSecuritySubfunction(s7_header* header, const u_char* data, short subfunction, short type)
 {
      // Event variables
-    val_list* vl;
+    Args vl;
     EventHandlerPtr ev;
     RecordVal* data_rec;
 
     std::string packet_type = GetPacketType(type);
 
-    vl = new val_list();
-    vl->append(BuildConnVal());
-    vl->append(CreateHeader(header));
-    vl->append(new StringVal(packet_type));
+    vl.emplace_back(ConnVal());
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeader(header)});
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(packet_type)});
 
     // There is nothing much known about this function, so we parse the whole thing in here
     ev = s7_ud_security;
-    vl->append(ParseUDUnknownData(data));
-    ConnectionEvent(ev, vl);
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDUnknownData(data)});
+    EnqueueConnEvent(ev, std::move(vl));
 }
 
 void S7_Comm_Analyzer::ParseUDPBCSubfunction(s7_header* header, const u_char* data, short subfunction, short type)
 {
-     // Protocol fields
+    // Protocol fields
     u_char* return_code;
     u_char* transport_size;
     u_int16* data_length;
@@ -1534,16 +1524,15 @@ void S7_Comm_Analyzer::ParseUDPBCSubfunction(s7_header* header, const u_char* da
     std::string rest_of_data = "";
 
      // Event variables
-    val_list* vl;
+    Args vl;
     EventHandlerPtr ev;
     RecordVal* data_rec;
 
     std::string packet_type = GetPacketType(type);
 
-    vl = new val_list();
-    vl->append(BuildConnVal());
-    vl->append(CreateHeader(header));
-    vl->append(new StringVal(packet_type));
+    vl.emplace_back(ConnVal());
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeader(header)});
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(packet_type)});
 
     ev = s7_ud_pbc;
 
@@ -1567,24 +1556,24 @@ void S7_Comm_Analyzer::ParseUDPBCSubfunction(s7_header* header, const u_char* da
     rest_of_data = HexToASCII((data + offset), (ntohs(*data_length)- 4 - 8));
     
     data_rec = new RecordVal(BifType::Record::S7Comm::S7UDPBC);
-    data_rec->Assign(0, new Val(*return_code, TYPE_COUNT));
-    data_rec->Assign(1, new Val(*transport_size, TYPE_COUNT));
-    data_rec->Assign(2, new Val(ntohs(*data_length), TYPE_COUNT));
-    data_rec->Assign(3, new Val(*var_spec, TYPE_COUNT));
-    data_rec->Assign(4, new Val(*addr_length, TYPE_COUNT));
-    data_rec->Assign(5, new Val(*syntax_id, TYPE_COUNT));
-    data_rec->Assign(6, new Val(*pbc_unknown, TYPE_COUNT));
-    data_rec->Assign(7, new Val(ntohl(*pbc_r_id), TYPE_COUNT));
+    data_rec->Assign(0, val_mgr->Count(*return_code));
+    data_rec->Assign(1, val_mgr->Count(*transport_size));
+    data_rec->Assign(2, val_mgr->Count(ntohs(*data_length)));
+    data_rec->Assign(3, val_mgr->Count(*var_spec));
+    data_rec->Assign(4, val_mgr->Count(*addr_length));
+    data_rec->Assign(5, val_mgr->Count(*syntax_id));
+    data_rec->Assign(6, val_mgr->Count(*pbc_unknown));
+    data_rec->Assign(7, val_mgr->Count(ntohl(*pbc_r_id)));
     data_rec->Assign(8, new StringVal(rest_of_data));
 
-    vl->append(data_rec);
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, data_rec});
 
-    ConnectionEvent(ev, vl);
+    EnqueueConnEvent(ev, std::move(vl));
 }
 
 void S7_Comm_Analyzer::ParseUDTimeSubfunction(s7_header* header, const u_char* data, short subfunction, short type)
 {
-    val_list* vl;
+    Args vl;
     EventHandlerPtr ev;
     RecordVal* data_rec;
 
@@ -1595,10 +1584,9 @@ void S7_Comm_Analyzer::ParseUDTimeSubfunction(s7_header* header, const u_char* d
 
     return_value = (u_char*) (data + offset);
 
-    vl = new val_list();
-    vl->append(BuildConnVal());
-    vl->append(CreateHeader(header));
-    vl->append(new StringVal(packet_type));
+    vl.emplace_back(ConnVal());
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeader(header)});
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(packet_type)});
 
     switch(subfunction)
     {
@@ -1607,13 +1595,13 @@ void S7_Comm_Analyzer::ParseUDTimeSubfunction(s7_header* header, const u_char* d
             if((short)*return_value == S7COMM_ITEM_RETVAL_DATA_OK && type == S7COMM_UD_TYPE_RES)
             {
                 ev = s7_ud_time_read;
-                vl->append(ParseS7Time(data));
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseS7Time(data)});
             }
             else
             {
                 ev = s7_ud_time_unknown;
-                vl->append(new Val(subfunction, TYPE_COUNT));
-                vl->append(ParseUDUnknownData(data));
+                vl.emplace_back(val_mgr->Count(subfunction));
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDUnknownData(data)});
             }
             break;
         }
@@ -1622,13 +1610,13 @@ void S7_Comm_Analyzer::ParseUDTimeSubfunction(s7_header* header, const u_char* d
             if((short)*return_value == S7COMM_ITEM_RETVAL_DATA_OK && type == S7COMM_UD_TYPE_RES)
             {
                 ev = s7_ud_time_readf;
-                vl->append(ParseS7Time(data));
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseS7Time(data)});
             }
             else
             {
                 ev = s7_ud_time_unknown;
-                vl->append(new Val(subfunction, TYPE_COUNT));
-                vl->append(ParseUDUnknownData(data));
+                vl.emplace_back(val_mgr->Count(subfunction));
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDUnknownData(data)});
             }
             break;
         }
@@ -1637,13 +1625,13 @@ void S7_Comm_Analyzer::ParseUDTimeSubfunction(s7_header* header, const u_char* d
             if((short)*return_value == S7COMM_ITEM_RETVAL_DATA_OK && type == S7COMM_UD_TYPE_REQ)
             {
                 ev = s7_ud_time_set1;
-                vl->append(ParseS7Time(data));
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseS7Time(data)});
             }
             else
             {
                 ev = s7_ud_time_unknown;
-                vl->append(new Val(subfunction, TYPE_COUNT));
-                vl->append(ParseUDUnknownData(data));
+                vl.emplace_back(val_mgr->Count(subfunction));
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDUnknownData(data)});
             }
             break;
         }
@@ -1652,19 +1640,19 @@ void S7_Comm_Analyzer::ParseUDTimeSubfunction(s7_header* header, const u_char* d
             if((short)*return_value == S7COMM_ITEM_RETVAL_DATA_OK && type == S7COMM_UD_TYPE_REQ)
             {
                 ev = s7_ud_time_set2;
-                vl->append(ParseS7Time(data));
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseS7Time(data)});
             }
             else
             {
                 ev = s7_ud_time_unknown;
-                vl->append(new Val(subfunction, TYPE_COUNT));
-                vl->append(ParseUDUnknownData(data));
+                vl.emplace_back(val_mgr->Count(subfunction));
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDUnknownData(data)});
             }
             break;
         }
     }
 
-    ConnectionEvent(ev, vl);
+    EnqueueConnEvent(ev, std::move(vl));
 }
 
 void S7_Comm_Analyzer::ParseUDNCProgSubfunction(s7_header* header, const u_char* data, short subfunction, short type)
@@ -1674,7 +1662,7 @@ void S7_Comm_Analyzer::ParseUDNCProgSubfunction(s7_header* header, const u_char*
     u_char* transport_size;
     u_int16* data_length;
 
-    val_list* vl;
+    Args vl;
     EventHandlerPtr ev;
     RecordVal* data_rec;
 
@@ -1687,19 +1675,18 @@ void S7_Comm_Analyzer::ParseUDNCProgSubfunction(s7_header* header, const u_char*
     data_length = (u_int16*) (data + offset);
     offset += 2;
 
-    vl = new val_list();
-    vl->append(BuildConnVal());
-    vl->append(CreateHeader(header));
-    vl->append(new Val(subfunction, TYPE_COUNT));
-    vl->append(new StringVal(packet_type));
-    vl->append(ParseUDUnknownData(data));
+    vl.emplace_back(ConnVal());
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeader(header)});
+    vl.emplace_back(val_mgr->Count(subfunction));
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(packet_type)});
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, ParseUDUnknownData(data)});
 
     ev = s7_ud_ncprog;
 
-    ConnectionEvent(ev, vl);
+    EnqueueConnEvent(ev, std::move(vl));
 }
 
-RecordVal* S7_Comm_Analyzer::ParseUDUnknownData(const u_char* data)
+zeek::RecordVal* S7_Comm_Analyzer::ParseUDUnknownData(const u_char* data)
 {
     // Protocol fields
     u_char* return_code;
@@ -1707,7 +1694,7 @@ RecordVal* S7_Comm_Analyzer::ParseUDUnknownData(const u_char* data)
     u_int16* data_length;
     std::string data_string;
 
-    // Bro types
+
     RecordVal * data_rec = 0;
 
     // Begin parsing...
@@ -1721,15 +1708,15 @@ RecordVal* S7_Comm_Analyzer::ParseUDUnknownData(const u_char* data)
     offset += ntohs(*data_length);
 
     data_rec = new RecordVal(BifType::Record::S7Comm::S7UDUnknownData);
-    data_rec->Assign(0, new Val(*return_code, TYPE_COUNT));
-    data_rec->Assign(1, new Val(*transport_size, TYPE_COUNT));
-    data_rec->Assign(2, new Val(ntohs(*data_length), TYPE_COUNT));
+    data_rec->Assign(0, val_mgr->Count(*return_code));
+    data_rec->Assign(1, val_mgr->Count(*transport_size));
+    data_rec->Assign(2, val_mgr->Count(ntohs(*data_length)));
     data_rec->Assign(3, new StringVal(data_string));
 
     return data_rec;
 }
 
-RecordVal* S7_Comm_Analyzer::ParseUDReqDiagData(short subfunction, const u_char* data)
+zeek::RecordVal* S7_Comm_Analyzer::ParseUDReqDiagData(short subfunction, const u_char* data)
 {
     // Protocol fields
     u_char* return_code;
@@ -1818,46 +1805,46 @@ RecordVal* S7_Comm_Analyzer::ParseUDReqDiagData(short subfunction, const u_char*
             item = new RecordVal(BifType::Record::S7Comm::S7UDReqDiagItem);
             if(subfunction == 0x13)
             {
-                item->Assign(0, new Val(ntohs(*address), TYPE_INT));
+                item->Assign(0, val_mgr->Count(ntohs(*address)));
             }
             else
             {
-                item->Assign(0, new Val(-1, TYPE_INT));
+                item->Assign(0, val_mgr->Int(-1));
             }
-            item->Assign(1, new Val((short)*registers, TYPE_COUNT));
-            item_vec->Assign(item_vec->Size(), item);
+            item->Assign(1, val_mgr->Count((short)*registers));
+            item_vec->Assign(item_vec->Size(), IntrusivePtr{AdoptRef{}, item});
         }
 
-        data_rec->Assign(0, new Val(*return_code, TYPE_COUNT));
-        data_rec->Assign(1, new Val(*transport_size, TYPE_COUNT));
-        data_rec->Assign(2, new Val(ntohs(*data_length), TYPE_COUNT));
-        data_rec->Assign(3, new Val(ntohs(*ask_header_size), TYPE_COUNT));
-        data_rec->Assign(4, new Val(ntohs(*ask_size), TYPE_COUNT));
-        data_rec->Assign(5, new Val(ntohs(*answer_size), TYPE_COUNT));
-        data_rec->Assign(6, new Val(*block_type, TYPE_COUNT));
-        data_rec->Assign(7, new Val(ntohs(*block_number), TYPE_COUNT));
-        data_rec->Assign(8, new Val(ntohs(*start_addr_awl), TYPE_COUNT));
-        data_rec->Assign(9, new Val(ntohs(*step_addr_counter), TYPE_COUNT));
-        data_rec->Assign(10, item_vec);
+        data_rec->Assign(0, val_mgr->Count(*return_code));
+        data_rec->Assign(1, val_mgr->Count(*transport_size));
+        data_rec->Assign(2, val_mgr->Count(ntohs(*data_length)));
+        data_rec->Assign(3, val_mgr->Count(ntohs(*ask_header_size)));
+        data_rec->Assign(4, val_mgr->Count(ntohs(*ask_size)));
+        data_rec->Assign(5, val_mgr->Count(ntohs(*answer_size)));
+        data_rec->Assign(6, val_mgr->Count(*block_type));
+        data_rec->Assign(7, val_mgr->Count(ntohs(*block_number)));
+        data_rec->Assign(8, val_mgr->Count(ntohs(*start_addr_awl)));
+        data_rec->Assign(9, val_mgr->Count(ntohs(*step_addr_counter)));
+        data_rec->Assign(10, IntrusivePtr{AdoptRef{}, item_vec});
     }
     else
     {
-        data_rec->Assign(0, new Val(*return_code, TYPE_COUNT));
-        data_rec->Assign(1, new Val(*transport_size, TYPE_COUNT));
-        data_rec->Assign(2, new Val(ntohs(*data_length), TYPE_COUNT));
-        data_rec->Assign(3, new Val(0, TYPE_COUNT));
-        data_rec->Assign(4, new Val(0, TYPE_COUNT));
-        data_rec->Assign(5, new Val(0, TYPE_COUNT));
-        data_rec->Assign(6, new Val(0, TYPE_COUNT));
-        data_rec->Assign(7, new Val(0, TYPE_COUNT));
-        data_rec->Assign(8, new Val(0, TYPE_COUNT));
-        data_rec->Assign(9, new Val(0, TYPE_COUNT));
-        data_rec->Assign(10, item_vec);
+        data_rec->Assign(0, val_mgr->Count(*return_code));
+        data_rec->Assign(1, val_mgr->Count(*transport_size));
+        data_rec->Assign(2, val_mgr->Count(ntohs(*data_length)));
+        data_rec->Assign(3, val_mgr->Count(0));
+        data_rec->Assign(4, val_mgr->Count(0));
+        data_rec->Assign(5, val_mgr->Count(0));
+        data_rec->Assign(6, val_mgr->Count(0));
+        data_rec->Assign(7, val_mgr->Count(0));
+        data_rec->Assign(8, val_mgr->Count(0));
+        data_rec->Assign(9, val_mgr->Count(0));
+        data_rec->Assign(10, IntrusivePtr{AdoptRef{}, item_vec});
     }
     return data_rec;
 }
 
-RecordVal* S7_Comm_Analyzer::ParseUDProgUnknownData(short subfunction, const u_char* data)
+zeek::RecordVal* S7_Comm_Analyzer::ParseUDProgUnknownData(short subfunction, const u_char* data)
 {
     // Protocol fields
     u_char* return_code;
@@ -1879,15 +1866,15 @@ RecordVal* S7_Comm_Analyzer::ParseUDProgUnknownData(short subfunction, const u_c
     data_string = HexToString((data + offset), ntohs(*length));
 
     data_rec = new RecordVal(BifType::Record::S7Comm::S7UDUnknownData);
-    data_rec->Assign(0, new Val(*return_code, TYPE_COUNT));
-    data_rec->Assign(1, new Val(*transport_size, TYPE_COUNT));
-    data_rec->Assign(2, new Val(ntohs(*length), TYPE_COUNT));
+    data_rec->Assign(0, val_mgr->Count(*return_code));
+    data_rec->Assign(1, val_mgr->Count(*transport_size));
+    data_rec->Assign(2, val_mgr->Count(ntohs(*length)));
     data_rec->Assign(3, new StringVal(data_string));
 
     return data_rec;
 }
 
-RecordVal* S7_Comm_Analyzer::ParseUDVarTab1Request(short subfunction, const u_char* data)
+zeek::RecordVal* S7_Comm_Analyzer::ParseUDVarTab1Request(short subfunction, const u_char* data)
 {
     // First 3 data fields
     u_char* return_value;
@@ -1945,36 +1932,36 @@ RecordVal* S7_Comm_Analyzer::ParseUDVarTab1Request(short subfunction, const u_ch
             offset += 2;
 
             item_rec = new RecordVal(BifType::Record::S7Comm::S7UDVarTab1ReqItem);
-            item_rec->Assign(0, new Val(*mem_area, TYPE_COUNT));
-            item_rec->Assign(1, new Val(*rep_fac, TYPE_COUNT));
-            item_rec->Assign(2, new Val(ntohs(*db_number), TYPE_COUNT));
-            item_rec->Assign(3, new Val(ntohs(*start_addr), TYPE_COUNT));
-            item_vec->Assign(item_vec->Size(), item_rec);
+            item_rec->Assign(0, val_mgr->Count(*mem_area));
+            item_rec->Assign(1, val_mgr->Count(*rep_fac));
+            item_rec->Assign(2, val_mgr->Count(ntohs(*db_number)));
+            item_rec->Assign(3, val_mgr->Count(ntohs(*start_addr)));
+            item_vec->Assign(item_vec->Size(), IntrusivePtr{AdoptRef{}, item_rec});
         }
 
-        data_rec->Assign(0, new Val(*return_value, TYPE_COUNT));
-        data_rec->Assign(1, new Val(*transport_size, TYPE_COUNT));
-        data_rec->Assign(2, new Val(ntohs(*data_length), TYPE_COUNT));
-        data_rec->Assign(3, new Val(*data_type, TYPE_COUNT));
-        data_rec->Assign(4, new Val(ntohs(*byte_count), TYPE_COUNT));
-        data_rec->Assign(5, new Val(ntohs(*item_count), TYPE_COUNT));
-        data_rec->Assign(6, item_vec);
+        data_rec->Assign(0, val_mgr->Count(*return_value));
+        data_rec->Assign(1, val_mgr->Count(*transport_size));
+        data_rec->Assign(2, val_mgr->Count(ntohs(*data_length)));
+        data_rec->Assign(3, val_mgr->Count(*data_type));
+        data_rec->Assign(4, val_mgr->Count(ntohs(*byte_count)));
+        data_rec->Assign(5, val_mgr->Count(ntohs(*item_count)));
+        data_rec->Assign(6, IntrusivePtr{AdoptRef{}, item_vec});
     }
     else
     {
-        data_rec->Assign(0, new Val(*return_value, TYPE_COUNT));
-        data_rec->Assign(1, new Val(*transport_size, TYPE_COUNT));
-        data_rec->Assign(2, new Val(ntohs(*data_length), TYPE_COUNT));
-        data_rec->Assign(3, new Val(0, TYPE_COUNT));
-        data_rec->Assign(4, new Val(0, TYPE_COUNT));
-        data_rec->Assign(5, new Val(0, TYPE_COUNT));
-        data_rec->Assign(6, item_vec);
+        data_rec->Assign(0, val_mgr->Count(*return_value));
+        data_rec->Assign(1, val_mgr->Count(*transport_size));
+        data_rec->Assign(2, val_mgr->Count(ntohs(*data_length)));
+        data_rec->Assign(3, val_mgr->Count(0));
+        data_rec->Assign(4, val_mgr->Count(0));
+        data_rec->Assign(5, val_mgr->Count(0));
+        data_rec->Assign(6, IntrusivePtr{AdoptRef{}, item_vec});
     }
 
     return data_rec;
 }
 
-RecordVal* S7_Comm_Analyzer::ParseUDVarTab1Response(short subfunction, const u_char* data)
+zeek::RecordVal* S7_Comm_Analyzer::ParseUDVarTab1Response(short subfunction, const u_char* data)
 {
     // First 3 data fields
     u_char* return_value;
@@ -2067,30 +2054,30 @@ RecordVal* S7_Comm_Analyzer::ParseUDVarTab1Response(short subfunction, const u_c
             }
 
             item_rec = new RecordVal(BifType::Record::S7Comm::S7UDVarTab1ResItem);
-            item_rec->Assign(0, new Val(ret_val_s, TYPE_COUNT));
-            item_rec->Assign(1, new Val(t_size_s, TYPE_COUNT));
-            item_rec->Assign(2, new Val(len, TYPE_COUNT));
+            item_rec->Assign(0, val_mgr->Count(ret_val_s));
+            item_rec->Assign(1, val_mgr->Count(t_size_s));
+            item_rec->Assign(2, val_mgr->Count(len));
             item_rec->Assign(3, new StringVal(ret_data));
-            item_vec->Assign(item_vec->Size(), item_rec);
+            item_vec->Assign(item_vec->Size(), IntrusivePtr{AdoptRef{}, item_rec});
         }
 
-        data_rec->Assign(0, new Val(*return_value, TYPE_COUNT));
-        data_rec->Assign(1, new Val(*transport_size, TYPE_COUNT));
-        data_rec->Assign(2, new Val(ntohs(*data_length), TYPE_COUNT));
-        data_rec->Assign(3, new Val(*data_type, TYPE_COUNT));
-        data_rec->Assign(4, new Val(ntohs(*byte_count), TYPE_COUNT));
-        data_rec->Assign(5, new Val(ntohs(*item_count), TYPE_COUNT));
-        data_rec->Assign(6, item_vec);
+        data_rec->Assign(0, val_mgr->Count(*return_value));
+        data_rec->Assign(1, val_mgr->Count(*transport_size));
+        data_rec->Assign(2, val_mgr->Count(ntohs(*data_length)));
+        data_rec->Assign(3, val_mgr->Count(*data_type));
+        data_rec->Assign(4, val_mgr->Count(ntohs(*byte_count)));
+        data_rec->Assign(5, val_mgr->Count(ntohs(*item_count)));
+        data_rec->Assign(6, IntrusivePtr{AdoptRef{}, item_vec});
     }
     else
     {
-        data_rec->Assign(0, new Val(*return_value, TYPE_COUNT));
-        data_rec->Assign(1, new Val(*transport_size, TYPE_COUNT));
-        data_rec->Assign(2, new Val(ntohs(*data_length), TYPE_COUNT));
-        data_rec->Assign(3, new Val(0, TYPE_COUNT));
-        data_rec->Assign(4, new Val(0, TYPE_COUNT));
-        data_rec->Assign(5, new Val(0, TYPE_COUNT));
-        data_rec->Assign(6, item_vec);
+        data_rec->Assign(0, val_mgr->Count(*return_value));
+        data_rec->Assign(1, val_mgr->Count(*transport_size));
+        data_rec->Assign(2, val_mgr->Count(ntohs(*data_length)));
+        data_rec->Assign(3, val_mgr->Count(0));
+        data_rec->Assign(4, val_mgr->Count(0));
+        data_rec->Assign(5, val_mgr->Count(0));
+        data_rec->Assign(6, IntrusivePtr{AdoptRef{}, item_vec});
     }
     return data_rec;
 }
@@ -2112,11 +2099,8 @@ void S7_Comm_Analyzer::ParseUDCyclMem(s7_header* header, std::string packet_type
 
     // Bro types
     RecordVal* item = 0;
-    val_list* vl = 0;
+    Args vl;
     EventHandlerPtr ev = 0;
-
-    // Function pointer
-    RecordVal* (analyzer::S7_Comm::S7_Comm_Analyzer::*parseItems)(const u_char*);
 
     // Begin parsing...
     return_code = (u_char*) (data + offset);
@@ -2169,19 +2153,18 @@ void S7_Comm_Analyzer::ParseUDCyclMem(s7_header* header, std::string packet_type
             Weird("S7_UD_Cycl: Unsupported variable specification...");
             continue;
         }
-        vl = new val_list();
-        vl->append(BuildConnVal());
-        vl->append(CreateHeader(header));
-        vl->append(new StringVal(packet_type));
-        vl->append(new Val(*return_code, TYPE_COUNT));
-        vl->append(new Val(*transport_size, TYPE_COUNT));
-        vl->append(new Val(ntohs(*item_count), TYPE_COUNT));
-        vl->append(new Val(i+1, TYPE_COUNT));
-        vl->append(new Val(*interval_timebase, TYPE_COUNT));
-        vl->append(new Val(*interval_time, TYPE_COUNT));
-        vl->append(item);
+        vl.emplace_back(ConnVal());
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeader(header)});
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(packet_type)});
+        vl.emplace_back(val_mgr->Count(*return_code));
+        vl.emplace_back(val_mgr->Count(*transport_size));
+        vl.emplace_back(val_mgr->Count(ntohs(*item_count)));
+        vl.emplace_back(val_mgr->Count(i+1));
+        vl.emplace_back(val_mgr->Count(*interval_timebase));
+        vl.emplace_back(val_mgr->Count(*interval_time));
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, item});
 
-        ConnectionEvent(ev, vl);
+        EnqueueConnEvent(ev, std::move(vl));
     }
 }
 
@@ -2195,7 +2178,7 @@ void S7_Comm_Analyzer::ParseUDCyclMemAck(s7_header* header, std::string packet_t
 
     // Bro types
     RecordVal* item;
-    val_list* vl = 0;
+    Args vl;
     EventHandlerPtr ev = 0;
 
     // Begin parsing...
@@ -2212,7 +2195,7 @@ void S7_Comm_Analyzer::ParseUDCyclMemAck(s7_header* header, std::string packet_t
     {
         item = ParseReadWriteData(data, (short)*item_count-i);
         
-        if(item->Type() == BifType::Record::S7Comm::S7NCKTypeItem)
+        if(item->GetType() == BifType::Record::S7Comm::S7NCKTypeItem)
         {
             ev = s7_ud_cycl_mem_ack_nck;  
         }
@@ -2221,20 +2204,19 @@ void S7_Comm_Analyzer::ParseUDCyclMemAck(s7_header* header, std::string packet_t
             ev = s7_ud_cycl_mem_ack;
         }
 
-        vl = new val_list();
-        vl->append(BuildConnVal());
-        vl->append(CreateHeaderWithError(header));
-        vl->append(new StringVal(packet_type));
-        vl->append(new Val(*return_code, TYPE_COUNT));
-        vl->append(new Val(*transport_size, TYPE_COUNT));
-        vl->append(new Val(ntohs(*item_count), TYPE_COUNT));
-        vl->append(new Val(i+1, TYPE_COUNT));
-        vl->append(item);
-        ConnectionEvent(ev, vl);
+        vl.emplace_back(ConnVal());
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, CreateHeaderWithError(header)});
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(packet_type)});
+        vl.emplace_back(val_mgr->Count(*return_code));
+        vl.emplace_back(val_mgr->Count(*transport_size));
+        vl.emplace_back(val_mgr->Count(ntohs(*item_count)));
+        vl.emplace_back(val_mgr->Count(i+1));
+        vl.emplace_back(IntrusivePtr{AdoptRef{}, item});
+        EnqueueConnEvent(ev, std::move(vl));
     }
 }
 
-RecordVal* S7_Comm_Analyzer::ParseUDBlockListType(short subfunction, const u_char* data)
+zeek::RecordVal* S7_Comm_Analyzer::ParseUDBlockListType(short subfunction, const u_char* data)
 {
     // Data fields
     u_char* return_code;
@@ -2288,9 +2270,9 @@ RecordVal* S7_Comm_Analyzer::ParseUDBlockListType(short subfunction, const u_cha
             offset += 2;
 
             item = new RecordVal(BifType::Record::S7Comm::S7UDBlockListItem);
-            item->Assign(0, new Val(ntohs(*block_type), TYPE_COUNT));
-            item->Assign(1, new Val(ntohs(*block_count), TYPE_COUNT));
-            item_vec->Assign(item_vec->Size(), item);
+            item->Assign(0, val_mgr->Count(ntohs(*block_type)));
+            item->Assign(1, val_mgr->Count(ntohs(*block_count)));
+            item_vec->Assign(item_vec->Size(), IntrusivePtr{AdoptRef{}, item});
         }
         else if(subfunction == S7COMM_UD_SUBF_BLOCK_LISTTYPE)
         {
@@ -2302,22 +2284,22 @@ RecordVal* S7_Comm_Analyzer::ParseUDBlockListType(short subfunction, const u_cha
             offset += 1;
 
             item = new RecordVal(BifType::Record::S7Comm::S7UDBlockListTypeItem);
-            item->Assign(0, new Val(ntohs(*block_number), TYPE_COUNT));
-            item->Assign(1, new Val(*block_flags, TYPE_COUNT));
-            item->Assign(2, new Val(*block_language, TYPE_COUNT));
-            item_vec->Assign(item_vec->Size(), item);
+            item->Assign(0, val_mgr->Count(ntohs(*block_number)));
+            item->Assign(1, val_mgr->Count(*block_flags));
+            item->Assign(2, val_mgr->Count(*block_language));
+            item_vec->Assign(item_vec->Size(), IntrusivePtr{AdoptRef{}, item});
         }
     }
 
-    data_rec->Assign(0, new Val(*return_code, TYPE_COUNT));
-    data_rec->Assign(1, new Val(*transport_size, TYPE_COUNT));
-    data_rec->Assign(2, new Val(ntohs(*data_length), TYPE_COUNT));
-    data_rec->Assign(3, item_vec);
+    data_rec->Assign(0, val_mgr->Count(*return_code));
+    data_rec->Assign(1, val_mgr->Count(*transport_size));
+    data_rec->Assign(2, val_mgr->Count(ntohs(*data_length)));
+    data_rec->Assign(3, IntrusivePtr{AdoptRef{}, item_vec});
 
     return data_rec;
 }
 
-RecordVal* S7_Comm_Analyzer::ParseUDBlockBlockInfoReq(short subfunction, const u_char* data)
+zeek::RecordVal* S7_Comm_Analyzer::ParseUDBlockBlockInfoReq(short subfunction, const u_char* data)
 {
     // Protocol fields
     u_char* return_code;
@@ -2345,9 +2327,9 @@ RecordVal* S7_Comm_Analyzer::ParseUDBlockBlockInfoReq(short subfunction, const u
     offset += 1;
 
     data_rec = new RecordVal(BifType::Record::S7Comm::S7UDBlockInfoReq);
-    data_rec->Assign(0, new Val(*return_code, TYPE_COUNT));
-    data_rec->Assign(1, new Val(*transport_size, TYPE_COUNT));
-    data_rec->Assign(2, new Val(ntohs(*data_length), TYPE_COUNT));
+    data_rec->Assign(0, val_mgr->Count(*return_code));
+    data_rec->Assign(1, val_mgr->Count(*transport_size));
+    data_rec->Assign(2, val_mgr->Count(ntohs(*data_length)));
     data_rec->Assign(3, new StringVal(block_type));
     data_rec->Assign(4, new StringVal(block_number));
     data_rec->Assign(5, new StringVal(filesystem));
@@ -2355,7 +2337,7 @@ RecordVal* S7_Comm_Analyzer::ParseUDBlockBlockInfoReq(short subfunction, const u
     return data_rec;
 }
 
-RecordVal* S7_Comm_Analyzer::ParseUDBlockBlockInfoRes(short subfunction, const u_char* data)
+zeek::RecordVal* S7_Comm_Analyzer::ParseUDBlockBlockInfoRes(short subfunction, const u_char* data)
 {
     // Protocol fields
     u_char* return_code;
@@ -2436,27 +2418,27 @@ RecordVal* S7_Comm_Analyzer::ParseUDBlockBlockInfoRes(short subfunction, const u
     offset += 4;
 
     data_rec = new RecordVal(BifType::Record::S7Comm::S7UDBlockInfoRes);
-    data_rec->Assign(0, new Val(*return_code, TYPE_COUNT));
-    data_rec->Assign(1, new Val(*transport_size, TYPE_COUNT));
-    data_rec->Assign(2, new Val(ntohs(*data_length), TYPE_COUNT));
-    data_rec->Assign(3, new Val(ntohs(*block_type), TYPE_COUNT));
-    data_rec->Assign(4, new Val(ntohs(*info_length), TYPE_COUNT));
-    data_rec->Assign(5, new Val(*block_flags, TYPE_COUNT));
-    data_rec->Assign(6, new Val(*block_language, TYPE_COUNT));
-    data_rec->Assign(7, new Val(*subblk_type, TYPE_COUNT));
-    data_rec->Assign(8, new Val(ntohs(*block_number), TYPE_COUNT));
-    data_rec->Assign(9, new Val(ntohl(*length_load_memory), TYPE_COUNT));
-    data_rec->Assign(10, new Val(ntohl(*block_security), TYPE_COUNT));
+    data_rec->Assign(0, val_mgr->Count(*return_code));
+    data_rec->Assign(1, val_mgr->Count(*transport_size));
+    data_rec->Assign(2, val_mgr->Count(ntohs(*data_length)));
+    data_rec->Assign(3, val_mgr->Count(ntohs(*block_type)));
+    data_rec->Assign(4, val_mgr->Count(ntohs(*info_length)));
+    data_rec->Assign(5, val_mgr->Count(*block_flags));
+    data_rec->Assign(6, val_mgr->Count(*block_language));
+    data_rec->Assign(7, val_mgr->Count(*subblk_type));
+    data_rec->Assign(8, val_mgr->Count(ntohs(*block_number)));
+    data_rec->Assign(9, val_mgr->Count(ntohl(*length_load_memory)));
+    data_rec->Assign(10, val_mgr->Count(ntohl(*block_security)));
     data_rec->Assign(11, new StringVal(code_timestamp));
     data_rec->Assign(12, new StringVal(interface_timestamp));
-    data_rec->Assign(13, new Val(ntohs(*ssb_length), TYPE_COUNT));
-    data_rec->Assign(14, new Val(ntohs(*add_length), TYPE_COUNT));
-    data_rec->Assign(15, new Val(ntohs(*localdata_length), TYPE_COUNT));
-    data_rec->Assign(16, new Val(ntohs(*mc7_code_length), TYPE_COUNT));
+    data_rec->Assign(13, val_mgr->Count(ntohs(*ssb_length)));
+    data_rec->Assign(14, val_mgr->Count(ntohs(*add_length)));
+    data_rec->Assign(15, val_mgr->Count(ntohs(*localdata_length)));
+    data_rec->Assign(16, val_mgr->Count(ntohs(*mc7_code_length)));
     data_rec->Assign(17, new StringVal(author));
     data_rec->Assign(18, new StringVal(family));
     data_rec->Assign(19, new StringVal(name));
-    data_rec->Assign(20, new Val(*version, TYPE_COUNT));
+    data_rec->Assign(20, val_mgr->Count(*version));
     data_rec->Assign(21, new StringVal(block_checksum));
     data_rec->Assign(22, new StringVal(reserved1));
     data_rec->Assign(23, new StringVal(reserved2));
@@ -2464,9 +2446,9 @@ RecordVal* S7_Comm_Analyzer::ParseUDBlockBlockInfoRes(short subfunction, const u
     return data_rec;
 }
 
-RecordVal* S7_Comm_Analyzer::ParseS7Time(const u_char* data)
+zeek::RecordVal* S7_Comm_Analyzer::ParseAnyItem(const u_char* data)
 {
-    // Data fields
+     // Data fields
     u_char* return_code;
     u_char* transport_size;
     u_int16* data_length;
@@ -2484,15 +2466,15 @@ RecordVal* S7_Comm_Analyzer::ParseS7Time(const u_char* data)
     offset += 10;
 
     data_rec = new RecordVal(BifType::Record::S7Comm::S7UDTime);
-    data_rec->Assign(0, new Val(*return_code, TYPE_COUNT));
-    data_rec->Assign(1, new Val(*transport_size, TYPE_COUNT));
-    data_rec->Assign(2, new Val(ntohs(*data_length), TYPE_COUNT));
+    data_rec->Assign(0, val_mgr->Count(*return_code));
+    data_rec->Assign(1, val_mgr->Count(*transport_size));
+    data_rec->Assign(2, val_mgr->Count(ntohs(*data_length)));
     data_rec->Assign(3, new StringVal(timestamp));
 
     return data_rec;
 }
 
-RecordVal* S7_Comm_Analyzer::ParseAnyItem(const u_char* data)
+zeek::RecordVal* S7_Comm_Analyzer::ParseS7Time(const u_char* data)
 {
     /* Any Type fields */
     u_char* var_spec_typ;
@@ -2505,7 +2487,6 @@ RecordVal* S7_Comm_Analyzer::ParseAnyItem(const u_char* data)
     std::string address;
 
     /* Event variables */
-    val_list* vl = 0;
     RecordVal* item = 0;
     EventHandlerPtr ev;
 
@@ -2543,18 +2524,18 @@ RecordVal* S7_Comm_Analyzer::ParseAnyItem(const u_char* data)
     offset += 3;
 
     item = new RecordVal(BifType::Record::S7Comm::S7AnyTypeItem);
-    item->Assign(0, new Val(*transport_size, TYPE_COUNT));
-    item->Assign(1, new Val(ntohs(*length), TYPE_COUNT));
-    item->Assign(2, new Val(ntohs(*db_number), TYPE_COUNT));
-    item->Assign(3, new Val(*area, TYPE_COUNT));
-    item->Assign(4, new Val((byte_bit_offset >> 3), TYPE_COUNT));
-    item->Assign(5, new Val((byte_bit_offset & 0x7), TYPE_COUNT));
+    item->Assign(0, val_mgr->Count(*transport_size));
+    item->Assign(1, val_mgr->Count(ntohs(*length)));
+    item->Assign(2, val_mgr->Count(ntohs(*db_number)));
+    item->Assign(3, val_mgr->Count(*area));
+    item->Assign(4, val_mgr->Count((byte_bit_offset >> 3)));
+    item->Assign(5, val_mgr->Count((byte_bit_offset & 0x7)));
     item->Assign(6, new StringVal(address));
 
     return item;
 }
 
-RecordVal* S7_Comm_Analyzer::ParseDbItem(const u_char* data)
+zeek::RecordVal* S7_Comm_Analyzer::ParseDbItem(const u_char* data)
 {
     /* DB Item fields */
     u_char* var_spec_typ;
@@ -2568,7 +2549,6 @@ RecordVal* S7_Comm_Analyzer::ParseDbItem(const u_char* data)
     u_int16* start_address;
 
     /* Event variables */
-    val_list* vl = 0;
     RecordVal* item = 0;
     VectorVal* v_subitems = 0;
     RecordVal* r_subitem = 0;
@@ -2585,7 +2565,7 @@ RecordVal* S7_Comm_Analyzer::ParseDbItem(const u_char* data)
 
     item = new RecordVal(BifType::Record::S7Comm::S7DBTypeItem);
     v_subitems = new VectorVal(BifType::Vector::S7Comm::S7DBTypeSubitemVector);
-    item->Assign(0, new Val((short)*subitems, TYPE_COUNT));
+    item->Assign(0, val_mgr->Count((short)*subitems));
 
     for(int j = 0; j< (short)*subitems; j++)
     {
@@ -2597,19 +2577,19 @@ RecordVal* S7_Comm_Analyzer::ParseDbItem(const u_char* data)
         offset += 2;
 
         r_subitem = new RecordVal(BifType::Record::S7Comm::S7DBTypeSubitem);
-        r_subitem->Assign(0, new Val((short)*bytes_to_read, TYPE_COUNT));
-        r_subitem->Assign(1, new Val(ntohs(*db_number), TYPE_COUNT));
-        r_subitem->Assign(2, new Val(ntohs(*start_address), TYPE_COUNT));
+        r_subitem->Assign(0, val_mgr->Count((short)*bytes_to_read));
+        r_subitem->Assign(1, val_mgr->Count(ntohs(*db_number)));
+        r_subitem->Assign(2, val_mgr->Count(ntohs(*start_address)));
 
-        v_subitems->Assign(v_subitems->Size(), r_subitem);
+        v_subitems->Assign(v_subitems->Size(), IntrusivePtr{AdoptRef{}, r_subitem});
     }
 
-    item->Assign(1,v_subitems);
+    item->Assign(1, IntrusivePtr{AdoptRef{}, v_subitems});
 
     return item;
 }
 
-RecordVal* S7_Comm_Analyzer::ParseSymItem(const u_char *data)
+zeek::RecordVal* S7_Comm_Analyzer::ParseSymItem(const u_char *data)
 {
     /* SYM Item fields */ 
     u_char* var_spec_typ;
@@ -2622,7 +2602,6 @@ RecordVal* S7_Comm_Analyzer::ParseSymItem(const u_char *data)
     u_int32* substructure;
 
     /* Event variables */
-    val_list* vl = 0;
     RecordVal* item = 0;
     VectorVal* v_substructs = 0;
     RecordVal* r_subtruct = 0;
@@ -2646,28 +2625,28 @@ RecordVal* S7_Comm_Analyzer::ParseSymItem(const u_char *data)
     item = new RecordVal(BifType::Record::S7Comm::S71200SymTypeItem);
     v_substructs = new VectorVal(BifType::Vector::S7Comm::S71200SymSubstructurVector);
 
-    item->Assign(0, new Val((short)*reserved, TYPE_COUNT));
-    item->Assign(1, new Val((short)*area1, TYPE_COUNT));
-    item->Assign(2, new Val((short)*area2, TYPE_COUNT));
-    item->Assign(3, new Val((short)*crc, TYPE_COUNT));
+    item->Assign(0, val_mgr->Count((short)*reserved));
+    item->Assign(1, val_mgr->Count((short)*area1));
+    item->Assign(2, val_mgr->Count((short)*area2));
+    item->Assign(3, val_mgr->Count((short)*crc));
 
     for(int i = 0; i < ((short)*addr_length - 10) / 4; i++)
     {
         substructure = (u_int32*) (data + offset);
         r_subtruct = new RecordVal(BifType::Record::S7Comm::S71200SymSubstructurItem);
-        r_subtruct->Assign(0, new Val(((4 >> *substructure) & 0xF), TYPE_COUNT));
-        r_subtruct->Assign(1, new Val(ntohl(*substructure) & 0x0FFFFFF, TYPE_COUNT));
+        r_subtruct->Assign(0, val_mgr->Count(((4 >> *substructure) & 0xF)));
+        r_subtruct->Assign(1, val_mgr->Count(ntohl(*substructure) & 0x0FFFFFF));
 
-        v_substructs->Assign(v_substructs->Size(), r_subtruct);
+        v_substructs->Assign(v_substructs->Size(), IntrusivePtr{AdoptRef{}, r_subtruct});
         offset += 4;
     }
 
-    item->Assign(4,v_substructs);
+    item->Assign(4, IntrusivePtr{AdoptRef{}, v_substructs});
 
     return item;
 }
 
-RecordVal* S7_Comm_Analyzer::ParseNckItem(const u_char *data)
+zeek::RecordVal* S7_Comm_Analyzer::ParseNckItem(const u_char *data)
 {
     /* NCK Item fields */ 
     u_char* nck_area;
@@ -2677,7 +2656,6 @@ RecordVal* S7_Comm_Analyzer::ParseNckItem(const u_char *data)
     u_int16* nck_line;
 
     /* Event variables */
-    val_list* vl = 0;
     RecordVal* item = 0;
     EventHandlerPtr ev = 0;
 
@@ -2694,16 +2672,16 @@ RecordVal* S7_Comm_Analyzer::ParseNckItem(const u_char *data)
 
     item = new RecordVal(BifType::Record::S7Comm::S7NCKTypeItem);
 
-    item->Assign(0, new Val((short)*nck_area, TYPE_COUNT));
-    item->Assign(1, new Val(ntohs(*nck_column), TYPE_COUNT));
-    item->Assign(2, new Val(ntohs(*nck_line), TYPE_COUNT));
-    item->Assign(3, new Val((short)*nck_module, TYPE_COUNT));
-    item->Assign(4, new Val((short)*nck_linecount, TYPE_COUNT));
+    item->Assign(0, val_mgr->Count((short)*nck_area));
+    item->Assign(1, val_mgr->Count(ntohs(*nck_column)));
+    item->Assign(2, val_mgr->Count(ntohs(*nck_line)));
+    item->Assign(3, val_mgr->Count((short)*nck_module));
+    item->Assign(4, val_mgr->Count((short)*nck_linecount));
 
     return item;
 }
 
-RecordVal* S7_Comm_Analyzer::ParseDriveAnyItem(const u_char *data)
+zeek::RecordVal* S7_Comm_Analyzer::ParseDriveAnyItem(const u_char *data)
 {
     /* NCK Item fields */
     /* Only 2 field are known, the rest is unknown... */
@@ -2711,7 +2689,6 @@ RecordVal* S7_Comm_Analyzer::ParseDriveAnyItem(const u_char *data)
     u_int16* idx;
 
     /* Event variables */
-    val_list* vl = 0;
     RecordVal* item = 0;
     EventHandlerPtr ev = 0;
 
@@ -2725,13 +2702,13 @@ RecordVal* S7_Comm_Analyzer::ParseDriveAnyItem(const u_char *data)
 
     item = new RecordVal(BifType::Record::S7Comm::S7DriveAnyTypeItem);
 
-    item->Assign(0, new Val(ntohs(*nr), TYPE_COUNT));
-    item->Assign(1, new Val(ntohs(*idx), TYPE_COUNT));
+    item->Assign(0, val_mgr->Count(ntohs(*nr)));
+    item->Assign(1, val_mgr->Count(ntohs(*idx)));
 
     return item;
 }
 
-RecordVal* S7_Comm_Analyzer::ParseReadWriteData(const u_char* data, short item_count)
+zeek::RecordVal* S7_Comm_Analyzer::ParseReadWriteData(const u_char* data, short item_count)
 {
     /* Read Data items */
     u_char* return_code;
@@ -2746,7 +2723,6 @@ RecordVal* S7_Comm_Analyzer::ParseReadWriteData(const u_char* data, short item_c
     u_int16 len = 0, len2 = 0;
 
     /* Event variables */
-    val_list* vl = 0;
     RecordVal* item = 0, *data_field = 0;
     EventHandlerPtr ev = 0;
 
@@ -2821,10 +2797,10 @@ RecordVal* S7_Comm_Analyzer::ParseReadWriteData(const u_char* data, short item_c
         }
 
         item = new RecordVal(BifType::Record::S7Comm::S7ReadWriteData);  
-        item->Assign(0, new Val((short)*return_code, TYPE_COUNT));
-        item->Assign(1, new Val((short)*transport_size, TYPE_COUNT));
-        item->Assign(2, new Val(len, TYPE_COUNT));
-        item->Assign(3, new StringVal(data_str));
+        item->Assign(0, val_mgr->Count((short)*return_code));
+        item->Assign(1, val_mgr->Count((short)*transport_size));
+        item->Assign(2, val_mgr->Count(len));
+        item->Assign(3, std::move(new StringVal(data_str)));
 
         return item;
     }
@@ -2842,37 +2818,37 @@ short S7_Comm_Analyzer::ParseAckDataWriteData(const u_char* data)
     return (short)*return_code;
 }
 
-RecordVal* S7_Comm_Analyzer::CreateHeader(s7_header* header)
+zeek::RecordVal* S7_Comm_Analyzer::CreateHeader(s7_header* header)
 {
     RecordVal* h = new RecordVal(BifType::Record::S7Comm::S7Header);
 
-    h->Assign(0, new Val((short)header->protocol_id, TYPE_COUNT));
-    h->Assign(1, new Val((short)header->msg_type, TYPE_COUNT));
-    h->Assign(2, new Val(ntohs(header->pdu_ref), TYPE_COUNT));
-    h->Assign(3, new Val(ntohs(header->parameter_length), TYPE_COUNT));
-    h->Assign(4, new Val(ntohs(header->data_length), TYPE_COUNT));
-    h->Assign(5, new Val(0, TYPE_COUNT));
-    h->Assign(6, new Val(0, TYPE_COUNT));
+    h->Assign(0, val_mgr->Count((short)header->protocol_id));
+    h->Assign(1, val_mgr->Count((short)header->msg_type));
+    h->Assign(2, val_mgr->Count(ntohs(header->pdu_ref)));
+    h->Assign(3, val_mgr->Count(ntohs(header->parameter_length)));
+    h->Assign(4, val_mgr->Count(ntohs(header->data_length)));
+    h->Assign(5, val_mgr->Count((short)header->error_class));
+    h->Assign(6, val_mgr->Count((short)header->error_code));
 
     return h;
 }
 
-RecordVal* S7_Comm_Analyzer::CreateHeaderWithError(s7_header* header)
+zeek::RecordVal* S7_Comm_Analyzer::CreateHeaderWithError(s7_header* header)
 {
     RecordVal* h = new RecordVal(BifType::Record::S7Comm::S7Header);
 
-    h->Assign(0, new Val((short)header->protocol_id, TYPE_COUNT));
-    h->Assign(1, new Val((short)header->msg_type, TYPE_COUNT));
-    h->Assign(2, new Val(ntohs(header->pdu_ref), TYPE_COUNT));
-    h->Assign(3, new Val(ntohs(header->parameter_length), TYPE_COUNT));
-    h->Assign(4, new Val(ntohs(header->data_length), TYPE_COUNT));
-    h->Assign(5, new Val((short)header->error_class, TYPE_COUNT));
-    h->Assign(6, new Val((short)header->error_code, TYPE_COUNT));
+    h->Assign(0, val_mgr->Count((short)header->protocol_id));
+    h->Assign(1, val_mgr->Count((short)header->msg_type));
+    h->Assign(2, val_mgr->Count(ntohs(header->pdu_ref)));
+    h->Assign(3, val_mgr->Count(ntohs(header->parameter_length)));
+    h->Assign(4, val_mgr->Count(ntohs(header->data_length)));
+    h->Assign(5, val_mgr->Count((short)header->error_class));
+    h->Assign(6, val_mgr->Count((short)header->error_code));
 
     return h;
 }
 
-RecordVal* S7_Comm_Analyzer::ParseAckDataDownloadData(const u_char* data)
+zeek::RecordVal* S7_Comm_Analyzer::ParseAckDataDownloadData(const u_char* data)
 {
     u_int16* data_length;
     std::string download_data;
@@ -2885,7 +2861,7 @@ RecordVal* S7_Comm_Analyzer::ParseAckDataDownloadData(const u_char* data)
     download_data = HexToString((data + offset), ntohs(*data_length));
 
     item = new RecordVal(BifType::Record::S7Comm::S7AckDataDownloadBlock);
-    item->Assign(0, new Val(ntohs(*data_length), TYPE_COUNT));
+    item->Assign(0, val_mgr->Count(ntohs(*data_length)));
     item->Assign(1, new StringVal(download_data));
 
     return item;
@@ -2970,7 +2946,7 @@ std::string S7_Comm_Analyzer::TimestampToString(const u_char* data)
     static const char mon_names[][4] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 
     day_milliseconds = (u_int32*) (data + offset);
-    days = (uint16*) (data + offset + 4);
+    days = (u_int16*) (data + offset + 4);
 
     t = 441763200L;
     t += (ntohs(*days) * 24 * 60 * 60);
@@ -3026,11 +3002,12 @@ std::string S7_Comm_Analyzer::S7TimeStampToString(const u_char* data, short byte
     /* year special: ignore the first byte, since some cpus give 1914 for 2014
      * if second byte is below 89, it's 2000..2089, if over 90 it's 1990..1999
      */
-    // Wireshark Dissector, line 2327
-    if(std::stoi(timestamp[2]) < 89)
+    // Wireshark Dissector, line 2327   
+    if(std::stoi(timestamp[2], 0, 16) < 89)
     {
         timestamp[1] = "20";
     }
+    
 
     return timestamp[4] 
             + "." + timestamp[3] 
@@ -3040,7 +3017,7 @@ std::string S7_Comm_Analyzer::S7TimeStampToString(const u_char* data, short byte
             + timestamp[6] + ":"
             + timestamp[7] + "."
             + timestamp[8] + " "
-            + day_names[std::stoi(timestamp[9]) - 1];
+            + day_names[std::stoi(timestamp[9], 0, 16) - 1];
 }
 
 
@@ -3064,15 +3041,15 @@ void S7_Comm_Analyzer::DecodePLCControlParameter(const u_char* data, int param_o
     {
         length = (u_char*) (data + param_offset);
         param_offset += 1;
-        strings_vec->Assign(strings_vec->Size(), new StringVal(HexToASCII((data + param_offset),(short)*length)));
+        strings_vec->Assign(strings_vec->Size(), IntrusivePtr{AdoptRef{}, new StringVal(HexToASCII((data + param_offset),(short)*length))});
     }
 }
 
 float S7_Comm_Analyzer::RealToFloat(std::string data)
 {
     real_to_float_union u;
-    stringstream ss(data);
-    ss >> hex >> u.ul;
+    std::stringstream ss(data);
+    ss >> std::hex >> u.ul;
     float f = u.f;
     return f;
 }

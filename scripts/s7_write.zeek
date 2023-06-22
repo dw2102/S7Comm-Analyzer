@@ -67,7 +67,7 @@ function reassable_write_items_ack(pdu_ref: count, items: count)
     }
 }
 
-event bro_init() &priority=5
+event zeek_init() &priority=5
 {
     write_count = 0;
     write_count_ack = 0;

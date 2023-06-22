@@ -13,7 +13,7 @@ export {
     };
 }
 
-event bro_init() &priority=5
+event zeek_init() &priority=5
 {
     Log::create_stream(S7CommPlusAll::LOG, [$columns=Info, $path="s7p_everything"]);
 }

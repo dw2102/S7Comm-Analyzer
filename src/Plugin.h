@@ -2,10 +2,10 @@
  * ISO over TCP / S7Comm protocol analyzer.
  * 
  * Based on the Wireshark dissector written by Thomas Wiens 
- * https://github.com/wireshark/wireshark/blob/5d99febe66e96b55a1defa58a906be254bad3a51/epan/dissectors/packet-s7comm.c,
- * https://github.com/wireshark/wireshark/blob/5d99febe66e96b55a1defa58a906be254bad3a51/epan/dissectors/packet-s7comm.h,
- * https://github.com/wireshark/wireshark/blob/fe219637a6748130266a0b0278166046e60a2d68/epan/dissectors/packet-s7comm_szl_ids.h,
- * https://github.com/wireshark/wireshark/blob/fe219637a6748130266a0b0278166046e60a2d68/epan/dissectors/packet-s7comm_szl_ids.c,
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm.h
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm.c
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm_szl_ids.h
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm_szl_ids.c
  * https://sourceforge.net/projects/s7commwireshark/
  * 
  * partially on the PoC S7Comm-Bro-Plugin written by György Miru
@@ -18,31 +18,32 @@
  * https://tools.ietf.org/html/rfc0905
  * 
  * Author: Dane Wullen
- * Date: 10.04.2018
- * Version: 1.0
+ * Date: 02.06.2023
+ * Version: 1.1
  * 
- * This plugin is a part of a master's thesis written at Fachhochschule in Aachen (Aachen University of Applied Sciences)
- * 
+ * This plugin was a part of a master's thesis written at Fachhochschule in Aachen (Aachen University of Applied Sciences)
+ * Rewritten for Zeek version 5.0.9
  */
 
-#ifndef BRO_PLUGIN_BRO_ISO_OVER_TCP
-#define BRO_PLUGIN_BRO_ISO_OVER_TCP
+#pragma once
 
-#include <plugin/Plugin.h>
+#include <zeek/plugin/Plugin.h>
+#include "zeek/analyzer/Component.h"
+#include "Iso_Over_TCP.h"
+#include "S7Comm.h"
+#include "S7CommPlus.h"
 
 namespace plugin {
-namespace Bro_Iso_Over_TCP {
+namespace ICS_ISO_OVER_TCP {
 
-class Plugin : public ::plugin::Plugin
+class Plugin : public zeek::plugin::Plugin
 {
-protected:
-	// Overridden from plugin::Plugin.
-	plugin::Configuration Configure() override;
+public:
+	// Overridden from zeek::plugin::Plugin.
+	zeek::plugin::Configuration Configure() override;
 };
 
 extern Plugin plugin;
 
 }
 }
-
-#endif

@@ -1,26 +1,10 @@
+ISO over TCP / S7Comm protocol analyzer.
 
-Bro::Iso_Over_TCP
-=================================
-
-
-A plugin for the Zeek (Bro) NIDS, mainly to parse S7Comm protocol data traffic. 
-S7Comm is based on ISO over TCP (RFC1006), so the "main" analyzer is ISO over TCP. 
-The plugin will feature a really simple ISO over TCP analyzer and a S7Comm analyzer.
-
-The S7Comm analyzer covers all known function of the S7Comm protocol excluding the
-cpu functions of the UserData packages. S7CommPlus analyzer is not finished and works to some
-extend. It covers the base functions of this protocol and can be used to log some events, but
-not the data (they will not be parsed).
-
-This plugin was written as a part of a master's thesis at Fachhochschule in Aachen (Aachen
-University of Applied Sciences). It was only tested with self-generated .pcap files from a Siemens
-S7 1204 and some .pcap files I found in other GitHub repositories.
- 
 Based on the Wireshark dissector written by Thomas Wiens 
-https://github.com/wireshark/wireshark/blob/5d99febe66e96b55a1defa58a906be254bad3a51/epan/dissectors/packet-s7comm.c,
-https://github.com/wireshark/wireshark/blob/5d99febe66e96b55a1defa58a906be254bad3a51/epan/dissectors/packet-s7comm.h,
-https://github.com/wireshark/wireshark/blob/fe219637a6748130266a0b0278166046e60a2d68/epan/dissectors/packet-s7comm_szl_ids.h,
-https://github.com/wireshark/wireshark/blob/fe219637a6748130266a0b0278166046e60a2d68/epan/dissectors/packet-s7comm_szl_ids.c,
+https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm.h
+https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm.c
+https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm_szl_ids.h
+https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm_szl_ids.c
 https://sourceforge.net/projects/s7commwireshark/
 
 partially on the PoC S7Comm-Bro-Plugin written by György Miru
@@ -32,8 +16,9 @@ https://tools.ietf.org/html/rfc1006
 and RFC 905 (ISO Transport Protocol Specification)
 https://tools.ietf.org/html/rfc0905
 
+Author: Dane Wullen
+Date: 02.06.2023
+Version: 1.1
 
-Disclaimer
-
-As I mentioned before, I have never tested this analyzer on in a production environment.
-Therefore, I do not take responsibility for any damage or loss caused by this piece of software.
+This plugin was a part of a master's thesis written at Fachhochschule in Aachen (Aachen University of Applied Sciences)
+Rewritten for Zeek version 5.0.9

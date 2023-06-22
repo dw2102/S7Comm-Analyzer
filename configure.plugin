@@ -24,3 +24,8 @@ plugin_option()
             ;;
     esac
 }
+
+plugin_addl()
+{
+    : # Do nothing
+}

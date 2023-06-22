@@ -1,22 +1,31 @@
 /**
- * S7CommPlus protocol analyzer.
+ * ISO over TCP / S7Comm protocol analyzer.
  * 
- * Based on:
- * 
- * The Wireshark dissector written by Thomas Wiens
+ * Based on the Wireshark dissector written by Thomas Wiens 
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm.h
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm.c
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm_szl_ids.h
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm_szl_ids.c
  * https://sourceforge.net/projects/s7commwireshark/
- * https://github.com/JuergenKosel/s7commwireshark
- *  
+ * 
+ * partially on the PoC S7Comm-Bro-Plugin written by György Miru
+ * https://github.com/CrySyS/bro-step7-plugin/blob/master/README.md,
+ * 
+ * RFC 1006 (ISO Transport Service on top of the TCP)
+ * https://tools.ietf.org/html/rfc1006
+ * 
+ * and RFC 905 (ISO Transport Protocol Specification)
+ * https://tools.ietf.org/html/rfc0905
+ * 
  * Author: Dane Wullen
- * Date: 10.05.2018
- * Version: 1.0
+ * Date: 02.06.2023
+ * Version: 1.1
  * 
- * This plugin is a part of a master's thesis written at Fachhochschule in Aachen (Aachen University of Applied Sciences)
- * 
+ * This plugin was a part of a master's thesis written at Fachhochschule in Aachen (Aachen University of Applied Sciences)
+ * Rewritten for Zeek version 5.0.9
  */
 
-#ifndef ANALYZER_PROTOCOLS7_COMM_PLUS_H
-#define ANALYZER_PROTOCOLS7_COMM_PLUS_H
+#pragma once
 
 #include <stdio.h>
 #include <algorithm>
@@ -45,10 +54,7 @@ struct s7plus_trailer {
     u_int16 data_length;
 };
 
-
-
-
-namespace analyzer { namespace S7_Comm_Plus {
+namespace zeek::analyzer { namespace s7_comm_plus {
 
     union real_to_float_union
     {
@@ -56,7 +62,7 @@ namespace analyzer { namespace S7_Comm_Plus {
         float f;
     };
 
-    class S7_Comm_Plus_Analyzer : public tcp::TCP_ApplicationAnalyzer {
+    class S7_Comm_Plus_Analyzer : public analyzer::tcp::TCP_ApplicationAnalyzer {
         public:
             S7_Comm_Plus_Analyzer(Connection* conn);
             virtual ~S7_Comm_Plus_Analyzer();
@@ -123,7 +129,5 @@ namespace analyzer { namespace S7_Comm_Plus {
             float RealToFloat(std::string data);
     };
 
-} } //end namespaces
-
-
-#endif
+} 
+} //end namespaces

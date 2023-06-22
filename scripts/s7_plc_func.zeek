@@ -20,7 +20,7 @@ export {
     };
 }
 
-event bro_init() &priority=5
+event zeek_init() &priority=5
 {
     job_plc_control = 0;
     ack_plc_control = 0;

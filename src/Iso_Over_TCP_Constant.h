@@ -25,35 +25,20 @@
  * Rewritten for Zeek version 5.0.9
  */
 
-#pragma once
+#pragma one
 
-#include <stdio.h>
-#include <zeek/analyzer/protocol/tcp/TCP.h>
-#include <zeek/analyzer/Analyzer.h>
-#include <NetVar.h>
-#include <iostream>
-#include "Typedef.h"
+// COTP PDU types
+#define CR 0xe0
+#define CC 0xd0
+#define DR 0x80
+#define DC 0xc0
+#define DT 0xf0
+#define ED 0x10
+#define AK 0x60
+#define EA 0x20
+#define RJ 0x50
+#define ERR 0x70
 
-namespace zeek::analyzer { namespace iso_over_tcp {
-
-    class ISO_Over_TCP_Analyzer : public analyzer::tcp::TCP_ApplicationAnalyzer {
-        public:
-            explicit ISO_Over_TCP_Analyzer(Connection* conn);
-            ~ISO_Over_TCP_Analyzer();
-            void Done();
-            void Init();
-            void DeliverStream(int len, const u_char* data, bool orig);
-            
-            static zeek::analyzer::Analyzer* Instantiate(Connection* conn)
-            {
-                return new ISO_Over_TCP_Analyzer(conn);
-            }
-        protected:
-
-            int offset;
-
-            void parseTPKT(int len, int offset, const u_char* data, bool orig);
-            void parseCOTP(int len, int offset, const u_char* data, bool orig);
-    };
-
-} } //end namespaces
+// S7 PDU types
+#define PROTOCOL_S7_COMM      0x32
+#define PROTOCOL_S7_COMM_PLUS 0x72

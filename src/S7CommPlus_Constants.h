@@ -1,22 +1,31 @@
 /**
- * S7CommPlus protocol analyzer.
+ * ISO over TCP / S7Comm protocol analyzer.
  * 
- * Based on:
- * 
- * The Wireshark dissector written by Thomas Wiens
+ * Based on the Wireshark dissector written by Thomas Wiens 
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm.h
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm.c
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm_szl_ids.h
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm_szl_ids.c
  * https://sourceforge.net/projects/s7commwireshark/
- * https://github.com/JuergenKosel/s7commwireshark
- *  
+ * 
+ * partially on the PoC S7Comm-Bro-Plugin written by György Miru
+ * https://github.com/CrySyS/bro-step7-plugin/blob/master/README.md,
+ * 
+ * RFC 1006 (ISO Transport Service on top of the TCP)
+ * https://tools.ietf.org/html/rfc1006
+ * 
+ * and RFC 905 (ISO Transport Protocol Specification)
+ * https://tools.ietf.org/html/rfc0905
+ * 
  * Author: Dane Wullen
- * Date: 10.05.2018
- * Version: 1.0
+ * Date: 02.06.2023
+ * Version: 1.1
  * 
- * This plugin is a part of a master's thesis written at Fachhochschule in Aachen (Aachen University of Applied Sciences)
- * 
+ * This plugin was a part of a master's thesis written at Fachhochschule in Aachen (Aachen University of Applied Sciences)
+ * Rewritten for Zeek version 5.0.9
  */
 
-#ifndef ANALYZER_PROTOCOL_S7COMM_PLUS_CONSTANTS_H
-#define ANALYZER_PROTOCOL_S7COMM_PLUS_CONSTANTS_H
+#pragma once
 
 #define PROTO_TAG_S7COMM_PLUS           "S7COMM-PLUS"
 
@@ -186,4 +195,3 @@
 #define S7COMMP_SPARSE_ARRAY                            0x40
 #define S7COMMP_UNKNOWN_ARRAY                           0x80
 
-#endif

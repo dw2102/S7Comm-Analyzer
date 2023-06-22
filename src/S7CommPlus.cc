@@ -1,18 +1,28 @@
 /**
- * S7CommPlus protocol analyzer.
+ * ISO over TCP / S7CommPlus protocol analyzer.
  * 
- * Based on:
- * 
- * The Wireshark dissector written by Thomas Wiens
+ * Based on the Wireshark dissector written by Thomas Wiens 
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm.h
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm.c
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm_szl_ids.h
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm_szl_ids.c
  * https://sourceforge.net/projects/s7commwireshark/
- * https://github.com/JuergenKosel/s7commwireshark
- *  
+ * 
+ * partially on the PoC S7Comm-Bro-Plugin written by György Miru
+ * https://github.com/CrySyS/bro-step7-plugin/blob/master/README.md,
+ * 
+ * RFC 1006 (ISO Transport Service on top of the TCP)
+ * https://tools.ietf.org/html/rfc1006
+ * 
+ * and RFC 905 (ISO Transport Protocol Specification)
+ * https://tools.ietf.org/html/rfc0905
+ * 
  * Author: Dane Wullen
- * Date: 10.05.2018
- * Version: 1.0
+ * Date: 02.06.2023
+ * Version: 1.1
  * 
- * This plugin is a part of a master's thesis written at Fachhochschule in Aachen (Aachen University of Applied Sciences)
- * 
+ * This plugin was a part of a master's thesis written at Fachhochschule in Aachen (Aachen University of Applied Sciences)
+ * Rewritten for Zeek version 5.0.9
  */
 
 #include <vector>
@@ -24,9 +34,9 @@
 #include "events.bif.h"
 #include "types.bif.h"
 
-using namespace analyzer::S7_Comm_Plus;
+using namespace zeek::analyzer::s7_comm_plus;
 
-S7_Comm_Plus_Analyzer::S7_Comm_Plus_Analyzer(Connection* conn): tcp::TCP_ApplicationAnalyzer("S7_Comm", conn)
+S7_Comm_Plus_Analyzer::S7_Comm_Plus_Analyzer(Connection* conn): tcp::TCP_ApplicationAnalyzer("S7_Comm_Plus", conn)
 {
 
 }
@@ -98,7 +108,7 @@ void S7_Comm_Plus_Analyzer::ParseData(const u_char* data, s7plus_header* header,
 
     RecordVal* header_rec = 0;
     RecordVal* trailer_rec = 0;
-    val_list* vl = 0;
+    Args vl;
     EventHandlerPtr ev = 0;
 
     op_code = (u_char*) (data + data_offset);
@@ -277,46 +287,45 @@ void S7_Comm_Plus_Analyzer::ParseData(const u_char* data, s7plus_header* header,
     header_rec = new RecordVal(BifType::Record::S7CommPlus::S7PHeader);
     trailer_rec = new RecordVal(BifType::Record::S7CommPlus::S7PTrailer);
 
-    header_rec->Assign(0, new Val(header->protocol_id, TYPE_COUNT));
-    header_rec->Assign(1, new Val(header->version, TYPE_COUNT));
-    header_rec->Assign(2, new Val(header->data_length, TYPE_COUNT));
+    header_rec->Assign(0, val_mgr->Count(header->protocol_id));
+    header_rec->Assign(1, val_mgr->Count(header->version));
+    header_rec->Assign(2, val_mgr->Count(header->data_length));
 
-    trailer_rec->Assign(0, new Val(trailer->protocol_id, TYPE_COUNT));
-    trailer_rec->Assign(1, new Val(trailer->version, TYPE_COUNT));
-    trailer_rec->Assign(2, new Val(trailer->data_length, TYPE_COUNT));
+    trailer_rec->Assign(0, val_mgr->Count(trailer->protocol_id));
+    trailer_rec->Assign(1, val_mgr->Count(trailer->version));
+    trailer_rec->Assign(2, val_mgr->Count(trailer->data_length));
 
-    vl = new val_list();
-    vl->append(BuildConnVal());
-    vl->append(new StringVal(packet_type));
+    vl.emplace_back(ConnVal());
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(packet_type)});
 
     if((short)*op_code != S7COMMP_OPCODE_NOTIFICATION)
     {
-        vl->append(new Val(ntohs(*sequence_number), TYPE_COUNT));
+        vl.emplace_back(val_mgr->Count(ntohs(*sequence_number)));
     }
     else
     {
-        vl->append(new Val(0, TYPE_COUNT));
+        vl.emplace_back(val_mgr->Count(0));
     }
 
     if((short)*op_code == S7COMMP_OPCODE_REQ)
     {
-        vl->append(new Val(ntohl(*session_number), TYPE_COUNT));
+        vl.emplace_back(val_mgr->Count(ntohl(*session_number)));
     }
     else
     {
-        vl->append(new Val(0, TYPE_COUNT));
+        vl.emplace_back(val_mgr->Count(0));
     }
     
-    vl->append(header_rec);
-    vl->append(new StringVal(HexToString((data + offset - header->data_length), header->data_length)));
-    vl->append(trailer_rec);
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, header_rec});
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(HexToString((data + offset - header->data_length), header->data_length))});
+    vl.emplace_back(IntrusivePtr{AdoptRef{}, trailer_rec});
 
-    ConnectionEvent(ev, vl);
+    EnqueueConnEvent(ev, std::move(vl));
 }
 
 void S7_Comm_Plus_Analyzer::ParseNotification(const u_char* data)
 {
-    
+    // To be filled
 }
 
 void S7_Comm_Plus_Analyzer::ParseGetMultiVariablesReq(const u_char* data)
@@ -358,13 +367,13 @@ void S7_Comm_Plus_Analyzer::ParseGetMultiVariablesReq(const u_char* data)
 
 void S7_Comm_Plus_Analyzer::ParseSetMultiVariablesReq(const u_char* data)
 {
-
+    // To be filled
 }
 
 void S7_Comm_Plus_Analyzer::ParseSetVariableReq(const u_char* data)
 {
-
-}
+    // To be filled
+}   
 
 void S7_Comm_Plus_Analyzer::ParseCreateObjectReq(const u_char* data)
 {
@@ -391,14 +400,12 @@ void S7_Comm_Plus_Analyzer::ParseCreateObjectRes(s7plus_header* header, const u_
 {
     // TODO: Generate event
     int octets = 0;
-    vector<int> object_ids;
+    std::vector<int> object_ids;
     std::string context = "CreateObject Response"; // To determine 'where' the object came from
 
-    
-
-    uint64 return_value;
+    u_int64 return_value;
     u_char object_id_count;
-    uint32 object_id;
+    u_int32 object_id;
 
     return_value = GetVarUInt64(data, octets);
     data_offset += octets;
@@ -419,12 +426,12 @@ void S7_Comm_Plus_Analyzer::ParseCreateObjectRes(s7plus_header* header, const u_
 
 void S7_Comm_Plus_Analyzer::DecodeRelation(const u_char* data, std::string context)
 {
-
+    // To be filled
 }
 
 void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context, bool first_value)
 {
-    u_char* datatype_flags;
+     u_char* datatype_flags;
     u_char* datatype;
     u_int32 array_size = 1; // Single Value
     int array_size_octets = 0;
@@ -435,7 +442,7 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
 
     RecordVal* info = 0;
     EventHandlerPtr ev = 0;
-    val_list* vl = 0;
+    Args vl;
 
     if(!first_value)
     {
@@ -478,11 +485,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
         }
 
         info = new RecordVal(BifType::Record::S7CommPlus::S7PItemValueInfo);
-        info->Assign(0, new Val(*datatype_flags, TYPE_COUNT));
-        info->Assign(1, new Val(array_size, TYPE_COUNT));
-        info->Assign(2, new Val(i, TYPE_COUNT));
-        info->Assign(3, new StringVal(context));
-        info->Assign(4, new Val(*datatype, TYPE_COUNT));
+        info->Assign(0, val_mgr->Count(*datatype_flags));
+        info->Assign(1, val_mgr->Count(array_size));
+        info->Assign(2, val_mgr->Count(i));
+        info->Assign(3, IntrusivePtr{AdoptRef{}, new StringVal(context)});
+        info->Assign(4, val_mgr->Count(*datatype));
 
         switch(*datatype)
         {
@@ -496,13 +503,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 data_offset += 1;
 
                 ev = s7p_item_value_bool;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(val_mgr->Bool((short)*value));
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new Val((short)*value, TYPE_BOOL));
-
-                ConnectionEvent(ev, vl);
+                EnqueueConnEvent(ev, vl);
 
                 break;
             }
@@ -512,13 +517,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 data_offset += 1;
 
                 ev = s7p_item_value_count;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(val_mgr->Count((short)*value));
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new Val((short)*value, TYPE_COUNT));
-
-                ConnectionEvent(ev, vl);
+                EnqueueConnEvent(ev, vl);
 
                 break;
             }
@@ -528,13 +531,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 data_offset += 2;
 
                 ev = s7p_item_value_count;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(val_mgr->Count(ntohs(*value)));
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new Val(ntohs(*value), TYPE_COUNT));
-
-                ConnectionEvent(ev, vl);
+                EnqueueConnEvent(ev, vl);
 
                 break;
             }
@@ -545,13 +546,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 data_offset += octets;
 
                 ev = s7p_item_value_count;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(val_mgr->Count(value));
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new Val(value, TYPE_COUNT));
-
-                ConnectionEvent(ev, vl);
+                EnqueueConnEvent(ev, vl);
 
                 break;
             }
@@ -562,13 +561,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 data_offset += octets;
 
                 ev = s7p_item_value_count;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(val_mgr->Count(value));
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new Val(value, TYPE_COUNT));
-
-                ConnectionEvent(ev, vl);
+                EnqueueConnEvent(ev, vl);
 
                 break;
             }
@@ -579,13 +576,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 data_offset += octets;
 
                 ev = s7p_item_value_int;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(val_mgr->Int(value));
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new Val(value, TYPE_INT));
-
-                ConnectionEvent(ev, vl);
+                EnqueueConnEvent(ev, vl);
 
                 break;
             }
@@ -595,13 +590,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 data_offset += 1;
 
                 ev = s7p_item_value_count;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(val_mgr->Count((short)*value));
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new Val((short)*value, TYPE_COUNT));
-
-                ConnectionEvent(ev, vl);
+                EnqueueConnEvent(ev, vl);
 
                 break;
             }
@@ -611,13 +604,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 data_offset += 2;
 
                 ev = s7p_item_value_count;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(val_mgr->Count(ntohs(*value)));
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new Val(ntohs(*value), TYPE_COUNT));
-
-                ConnectionEvent(ev, vl);
+                EnqueueConnEvent(ev, vl);
 
                 break;
             }
@@ -628,13 +619,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 data_offset += octets;
 
                 ev = s7p_item_value_int;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(val_mgr->Int(value));
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new Val(value, TYPE_INT));
-
-                ConnectionEvent(ev, vl);
+                EnqueueConnEvent(ev, vl);
 
                 break;
             }
@@ -644,13 +633,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 data_offset += 1;
 
                 ev = s7p_item_value_count;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(val_mgr->Count((short)*value));
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new Val((short)*value, TYPE_COUNT));
-
-                ConnectionEvent(ev, vl);
+                EnqueueConnEvent(ev, vl);
 
                 break;
             }
@@ -660,13 +647,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 data_offset += 2;
 
                 ev = s7p_item_value_count;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(val_mgr->Count(ntohs(*value)));
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new Val(ntohs(*value), TYPE_COUNT));
-
-                ConnectionEvent(ev, vl);
+                EnqueueConnEvent(ev, vl);
 
                 break;
             }
@@ -677,13 +662,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 context = context + " | Struct value: " + std::to_string(ntohl(*value));
 
                 ev = s7p_item_value_count;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(val_mgr->Count(ntohl(*value)));
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new Val(ntohl(*value), TYPE_COUNT));
-
-                ConnectionEvent(ev, vl);
+                EnqueueConnEvent(ev, vl);
 
                 DecodeValueList(data, context);
                 break;
@@ -694,13 +677,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 data_offset += 4;
 
                 ev = s7p_item_value_count;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(val_mgr->Count(ntohl(*value)));
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new Val(ntohl(*value), TYPE_COUNT));
-
-                ConnectionEvent(ev, vl);
+                EnqueueConnEvent(ev, vl);
 
                 break;
             }
@@ -710,13 +691,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 data_offset += 8;
 
                 ev = s7p_item_value_count;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(val_mgr->Count(ntoh64(*value)));
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new Val(ntoh64(*value), TYPE_COUNT));
-
-                ConnectionEvent(ev, vl);
+                EnqueueConnEvent(ev, vl);
 
                 break;
             }
@@ -726,13 +705,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 data_offset += 4;
 
                 ev = s7p_item_value_double;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(val_mgr->Int(RealToFloat(value)));
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new Val(RealToFloat(value), TYPE_DOUBLE));
-
-                ConnectionEvent(ev, vl);
+                EnqueueConnEvent(ev, vl);
 
                 break;
             }
@@ -742,13 +719,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 data_offset += 8;
 
                 ev = s7p_item_value_double;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(val_mgr->Int(RealToFloat(value)));
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new Val(RealToFloat(value), TYPE_DOUBLE));
-
-                ConnectionEvent(ev, vl);
+                EnqueueConnEvent(ev, vl);
 
                 break;
             }
@@ -758,13 +733,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 std::string timestamp_str = TimestampToString(ntoh64(*timestamp));
 
                 ev = s7p_item_value_string;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(timestamp_str)});
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new StringVal(timestamp_str));
-
-                ConnectionEvent(ev, vl);
+                EnqueueConnEvent(ev, vl);
 
                 break;
             }
@@ -776,13 +749,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 std::string timespan = TimespanToString(ntoh64(value));
 
                 ev = s7p_item_value_string;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(timespan)});
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new StringVal(timespan));
-
-                ConnectionEvent(ev, vl);
+                EnqueueConnEvent(ev, vl);
 
                 break;
             }
@@ -792,13 +763,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 data_offset += 4;
 
                 ev = s7p_item_value_count;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(val_mgr->Count(ntohl(*value)));  
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new Val(ntohl(*value), TYPE_COUNT));  
-
-                ConnectionEvent(ev, vl);  
+                EnqueueConnEvent(ev, vl);  
 
                 break;
             }
@@ -809,13 +778,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 data_offset += octets;
 
                 ev = s7p_item_value_count;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(val_mgr->Count(ntohl(value)));
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new Val(ntohl(value), TYPE_COUNT));
-
-                ConnectionEvent(ev, vl);
+                EnqueueConnEvent(ev, vl);
 
                 break;
             }
@@ -828,13 +795,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 data_offset += length;
 
                 ev = s7p_item_value_string;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(value)});
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new StringVal(value));
-
-                ConnectionEvent(ev, vl);
+                EnqueueConnEvent(ev, vl);
 
                 break;
             }
@@ -845,13 +810,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                 data_offset += octets;
 
                 ev = s7p_item_value_count;
+                vl.emplace_back(ConnVal());
+                vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                vl.emplace_back(val_mgr->Count(ntohl(value)));
 
-                vl = new val_list();
-                vl->append(BuildConnVal());
-                vl->append(info);
-                vl->append(new Val(ntohl(value), TYPE_COUNT));
-
-                ConnectionEvent(ev, vl);
+                EnqueueConnEvent(ev, vl);
 
                 break;
             }
@@ -871,13 +834,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                     context = context + " | Blob Root ID: " + std::to_string(blob_root_id);
 
                     ev = s7p_item_value_count;
+                    vl.emplace_back(ConnVal());
+                    vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                    vl.emplace_back(val_mgr->Count(blob_root_id));
 
-                    vl = new val_list();
-                    vl->append(BuildConnVal());
-                    vl->append(info);
-                    vl->append(new Val(blob_root_id, TYPE_COUNT));
-
-                    ConnectionEvent(ev, vl);
+                    EnqueueConnEvent(ev, vl);
 
                     DecodeValueList(data, context);
                 }
@@ -889,13 +850,11 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
                     data_offset += blobsize;
 
                     ev = s7p_item_value_string;
+                    vl.emplace_back(ConnVal());
+                    vl.emplace_back(IntrusivePtr{AdoptRef{}, info});
+                    vl.emplace_back(IntrusivePtr{AdoptRef{}, new StringVal(value)});
 
-                    vl = new val_list();
-                    vl->append(BuildConnVal());
-                    vl->append(info);
-                    vl->append(new StringVal(value));
-
-                    ConnectionEvent(ev, vl);
+                    EnqueueConnEvent(ev, vl);
                 }
                 break;
             }
@@ -909,7 +868,7 @@ void S7_Comm_Plus_Analyzer::DecodeValue(const u_char* data, std::string context,
 
 void S7_Comm_Plus_Analyzer::DecodeValueList(const u_char* data, std::string context)
 {
-    uint32 id_number;
+    u_int32 id_number;
     int octets = 0;
     bool terminate = false;
     do
@@ -930,7 +889,6 @@ void S7_Comm_Plus_Analyzer::DecodeValueList(const u_char* data, std::string cont
 
 void S7_Comm_Plus_Analyzer::DecodeObject(const u_char* data, std::string context)
 {
-
     bool terminate = false;
     u_char* element_id;
 
@@ -1017,87 +975,87 @@ void S7_Comm_Plus_Analyzer::DecodeObject(const u_char* data, std::string context
 
 void S7_Comm_Plus_Analyzer::ParseDeleteObjectReq(const u_char* data)
 {
-
+    // To be filled
 }
 
 void S7_Comm_Plus_Analyzer::ParseGetVarSubStreamedReq(const u_char* data)
 {
-
+    // To be filled
 }
 
 void S7_Comm_Plus_Analyzer::ParseExploreReq(const u_char* data)
 {
-
+    // To be filled
 }
 
 void S7_Comm_Plus_Analyzer::ParseGetLinkReq(const u_char* data)
 {
-
+    // To be filled
 }
 
 void S7_Comm_Plus_Analyzer::ParseBeginSequenceReq(const u_char* data)
 {
-
+    // To be filled
 }
 
 void S7_Comm_Plus_Analyzer::ParseEndSequenceReq(const u_char* data)
 {
-
+    // To be filled
 }
 
 void S7_Comm_Plus_Analyzer::ParseInvokeReq(const u_char* data)
 {
-
+    // To be filled
 }
 
 void S7_Comm_Plus_Analyzer::ParseGetMultiVariablesRes(const u_char* data)
 {
-
+    // To be filled
 }
 
 void S7_Comm_Plus_Analyzer::ParseSetMultiVariablesRes(const u_char* data)
 {
-
+    // To be filled
 }
 
 void S7_Comm_Plus_Analyzer::ParseSetVariableRes(const u_char* data)
 {
-
+    // To be filled
 }
 
 void S7_Comm_Plus_Analyzer::ParseDeleteObjectRes(const u_char* data)
 {
-
-}
+    // To be filled
+}   
 
 void S7_Comm_Plus_Analyzer::ParseGetVarSubStreamedRes(const u_char* data)
 {
-
+    // To be filled
 }
 
 void S7_Comm_Plus_Analyzer::ParseExploreRes(const u_char* data)
 {
-
+    // To be filled
 }
 
 void S7_Comm_Plus_Analyzer::ParseGetLinkRes(const u_char* data)
 {
-
+    // To be filled
 }
 
 void S7_Comm_Plus_Analyzer::ParseBeginSequenceRes(const u_char* data)
 {
-
+    // To be filled
 }
 
 void S7_Comm_Plus_Analyzer::ParseEndSequenceRes(const u_char* data)
 {
-
+    // To be filled
 }
 
 void S7_Comm_Plus_Analyzer::ParseInvokeRes(const u_char* data)
 {
-
+    // To be filled
 }
 
 std::string S7_Comm_Plus_Analyzer::HexToString(const unsigned char* data, int length)
@@ -1172,10 +1130,10 @@ std::string S7_Comm_Plus_Analyzer::TimespanToString(uint64_t timespan)
 {
     char sval[8];
     int64 divs[] = { 86400000000000LL, 3600000000000LL, 60000000000LL, 1000000000LL, 1000000LL, 1000LL, 1LL};
-    char *vfmt[] = { "%dd", "%02dh", "%02dm", "%02ds", "%03dms", "%03dus", "%03dns"};
+    char const *vfmt[] = { "%dd", "%02dh", "%02dm", "%02ds", "%03dms", "%03dus", "%03dns"};
     int64 val;
     int i;
-    char timespan_str[128];
+    char timespan_str[129];
 
     if (timespan == 0) {
         strncpy(timespan_str, "LT#000ns", 128);
@@ -1289,7 +1247,7 @@ int S7_Comm_Plus_Analyzer::GetVarInt64(const unsigned char* data, int& octets)
 int S7_Comm_Plus_Analyzer::GetVarUInt32(const unsigned char* data, int& octets)
 {
     int counter;
-    uint32_t val = 0;
+    u_int32_t val = 0;
     short octet;
     short cont;
     int func_offset = data_offset;
@@ -1385,8 +1343,8 @@ void S7_Comm_Plus_Analyzer::SkipToNextElementID(const u_char* data)
 float S7_Comm_Plus_Analyzer::RealToFloat(std::string data)
 {
     real_to_float_union u;
-    stringstream ss(data);
-    ss >> hex >> u.ul;
+    std::stringstream ss(data);
+    ss >> std::hex >> u.ul;
     float f = u.f;
     return f;
 }

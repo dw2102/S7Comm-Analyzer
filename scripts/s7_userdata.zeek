@@ -25,7 +25,7 @@ export {
     };
 }
 
-event bro_init() &priority=5
+event zeek_init() &priority=5
 {
     unknown_packets = 0;
     func_group_1 = 0;
@@ -39,19 +39,6 @@ event bro_init() &priority=5
 
     Log::create_stream(S7_UserData::LOG, [$columns=Info, $path="s7_userdata"]);
 } 
-
-event s7_ud_unknown(c: connection, header:S7Comm::S7Header, packet_type: string, subfunction: count, data: S7Comm::S7UDUnknownData)
-{
-    unknown_packets += 1;
-
-    local rec: S7_UserData::Info = [$ts=network_time(), 
-                                    $uid=c$uid, 
-                                    $id=c$id, 
-                                    $rosctr="Unknown Function",
-                                    $packet_type=packet_type];
-
-    Log::write(S7_UserData::LOG, rec);
-}
 
 event s7_ud_prog_reqdiagdata1(c: connection, header:S7Comm::S7Header, packet_type: string, data: S7Comm::S7UDReqDiagData)
 {
@@ -74,32 +61,6 @@ event s7_ud_prog_reqdiagdata2(c: connection, header:S7Comm::S7Header, packet_typ
                                     $uid=c$uid, 
                                     $id=c$id, 
                                     $rosctr="Programmer commands: Request Diag Data 2",
-                                    $packet_type=packet_type];
-
-    Log::write(S7_UserData::LOG, rec);
-}
-
-event s7_ud_prog_reqdiagdata1_unknown(c: connection, header:S7Comm::S7Header, packet_type: string, data: S7Comm::S7UDUnknownData)
-{
-    func_group_1 += 1;
-    
-    local rec: S7_UserData::Info = [$ts=network_time(), 
-                                    $uid=c$uid, 
-                                    $id=c$id, 
-                                    $rosctr="Programmer commands: Request Diag Data 1 /w Unknown Data",
-                                    $packet_type=packet_type];
-
-    Log::write(S7_UserData::LOG, rec);
-}
-
-event s7_ud_prog_reqdiagdata2_unknown(c: connection, header:S7Comm::S7Header, packet_type: string, data: S7Comm::S7UDUnknownData)
-{
-    func_group_1 += 1;
-    
-    local rec: S7_UserData::Info = [$ts=network_time(), 
-                                    $uid=c$uid, 
-                                    $id=c$id, 
-                                    $rosctr="Programmer commands: Request Diag Data 2 /w Unknown Data",
                                     $packet_type=packet_type];
 
     Log::write(S7_UserData::LOG, rec);

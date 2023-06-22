@@ -18,7 +18,7 @@ export {
     };
 }
 
-event bro_init() &priority=5
+event zeek_init() &priority=5
 {
     job_set = 0;
     ack_set = 0;

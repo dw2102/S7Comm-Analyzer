@@ -1,39 +1,31 @@
 /**
- * S7 Protocol constants
- * Most of this file was copied from the 
- * source of the S7 wireshark dissector
- * written by Thomas Wiens
- * https://sourceforge.net/projects/s7commwireshark/
- * Author: Gyorgy Miru
- * Date: 2015.11.04.
- * Version: 0.3
+ * ISO over TCP / S7Comm protocol analyzer.
  * 
- * Edited by Dane Wullen
- * Date: 2018.04.02
+ * Based on the Wireshark dissector written by Thomas Wiens 
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm.h
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm.c
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm_szl_ids.h
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm_szl_ids.c
+ * https://sourceforge.net/projects/s7commwireshark/
+ * 
+ * partially on the PoC S7Comm-Bro-Plugin written by György Miru
+ * https://github.com/CrySyS/bro-step7-plugin/blob/master/README.md,
+ * 
+ * RFC 1006 (ISO Transport Service on top of the TCP)
+ * https://tools.ietf.org/html/rfc1006
+ * 
+ * and RFC 905 (ISO Transport Protocol Specification)
+ * https://tools.ietf.org/html/rfc0905
+ * 
+ * Author: Dane Wullen
+ * Date: 02.06.2023
+ * Version: 1.1
+ * 
+ * This plugin was a part of a master's thesis written at Fachhochschule in Aachen (Aachen University of Applied Sciences)
+ * Rewritten for Zeek version 5.0.9
  */
 
-#ifndef ANALYZER_PROTOCOL_S7COMM_CONSTANTS_H
-#define ANALYZER_PROTOCOL_S7COMM_CONSTANTS_H
-
-#define PROTOCOL_S7_COMM      0x32
-#define PROTOCOL_S7_COMM_PLUS 0x72
-
-// COTP PDU types
-#define CR 0xe0
-#define CC 0xd0
-#define DR 0x80
-#define DC 0xc0
-#define DT 0xf0
-#define ED 0x10
-#define AK 0x60
-#define EA 0x20
-#define RJ 0x50
-#define ERR 0x70
-
-// CR CC class 0 variable parameter types
-#define SRC_TSAP 0xc1
-#define DST_TSAP 0xc2
-#define TPDU_LEN 0xc0
+#pragma once
 
 #define ANALYZER_ERROR_UNSUPPORTED_DATA_TYPE  0x4141
 #define ANALYZER_ERROR_UNEXPECTED_ITEM_COUNT  0x4242
@@ -380,5 +372,3 @@
 #define S7COMM_TIA1200_VAR_ITEM_AREA2_M     0x52
 #define S7COMM_TIA1200_VAR_ITEM_AREA2_C     0x53
 #define S7COMM_TIA1200_VAR_ITEM_AREA2_T     0x54
-
-#endif

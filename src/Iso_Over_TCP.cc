@@ -2,10 +2,10 @@
  * ISO over TCP / S7Comm protocol analyzer.
  * 
  * Based on the Wireshark dissector written by Thomas Wiens 
- * https://github.com/wireshark/wireshark/blob/5d99febe66e96b55a1defa58a906be254bad3a51/epan/dissectors/packet-s7comm.c,
- * https://github.com/wireshark/wireshark/blob/5d99febe66e96b55a1defa58a906be254bad3a51/epan/dissectors/packet-s7comm.h,
- * https://github.com/wireshark/wireshark/blob/fe219637a6748130266a0b0278166046e60a2d68/epan/dissectors/packet-s7comm_szl_ids.h,
- * https://github.com/wireshark/wireshark/blob/fe219637a6748130266a0b0278166046e60a2d68/epan/dissectors/packet-s7comm_szl_ids.c,
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm.h
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm.c
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm_szl_ids.h
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm_szl_ids.c
  * https://sourceforge.net/projects/s7commwireshark/
  * 
  * partially on the PoC S7Comm-Bro-Plugin written by György Miru
@@ -18,24 +18,24 @@
  * https://tools.ietf.org/html/rfc0905
  * 
  * Author: Dane Wullen
- * Date: 10.04.2018
- * Version: 1.0
+ * Date: 02.06.2023
+ * Version: 1.1
  * 
- * This plugin is a part of a master's thesis written at Fachhochschule in Aachen (Aachen University of Applied Sciences)
- * 
+ * This plugin was a part of a master's thesis written at Fachhochschule in Aachen (Aachen University of Applied Sciences)
+ * Rewritten for Zeek version 5.0.9
  */
 
 #include "Iso_Over_TCP.h"
+#include "Event.h"
+#include "events.bif.h"
+#include "Iso_Over_TCP_Constant.h"
+#include <zeek/analyzer/Manager.h>
 #include "S7Comm.h"
 #include "S7CommPlus.h"
-#include "Event.h"
-#include "S7Comm_Constants.h"
-#include "events.bif.h"
-#include "types.bif.h"
 
-using namespace analyzer::Iso_Over_TCP;
+using namespace zeek::analyzer::iso_over_tcp;
 
-ISO_Over_TCP_Analyzer::ISO_Over_TCP_Analyzer(Connection* conn): tcp::TCP_ApplicationAnalyzer("Iso_Over_TCP", conn)
+ISO_Over_TCP_Analyzer::ISO_Over_TCP_Analyzer(Connection* conn): analyzer::tcp::TCP_ApplicationAnalyzer("Iso_Over_TCP", conn)
 {
 
 }
@@ -47,12 +47,14 @@ ISO_Over_TCP_Analyzer::~ISO_Over_TCP_Analyzer()
 
 void ISO_Over_TCP_Analyzer::Init()
 {
-    tcp::TCP_ApplicationAnalyzer::Init();
+    analyzer::tcp::TCP_ApplicationAnalyzer::Init();
+    
 }
 
 void ISO_Over_TCP_Analyzer::Done()
 {
-    tcp::TCP_ApplicationAnalyzer::Done();
+    analyzer::tcp::TCP_ApplicationAnalyzer::Done();
+    
 }
 
 void ISO_Over_TCP_Analyzer::DeliverStream(int len, const u_char* data, bool orig)
@@ -64,9 +66,7 @@ void ISO_Over_TCP_Analyzer::DeliverStream(int len, const u_char* data, bool orig
 
 void ISO_Over_TCP_Analyzer::parseTPKT(int len, int offset, const u_char* data, bool orig)
 {
-    // Event variables
     EventHandlerPtr ev;
-    val_list* vl;
     // Field of the TPKT packet...
     u_char* version; // should be 3
     u_char* reserved; //most of the times 0
@@ -83,35 +83,26 @@ void ISO_Over_TCP_Analyzer::parseTPKT(int len, int offset, const u_char* data, b
     offset += 2;
 
     // Check if TPKT version equals 3...
-    if(*version != 3)
+    if (*version != 3)
     {
         Weird("Unexpected TPKT version detected");
     }
 
-    if(ntohs(*length) != len)
+    if (ntohs(*length) != len)
     {
         Weird("Stream length doesn't match TPKT length");
         return;
     }
-
-    // Create new TPKT packet event...
-    vl = new val_list();
-    vl->append(BuildConnVal());
-    vl->append(new Val(*version, TYPE_COUNT));
-    vl->append(new Val(ntohs(*length), TYPE_COUNT));
     ev = tpkt_packet;
-
-    ConnectionEvent(ev, vl);
+    EnqueueConnEvent(ev, ConnVal(), val_mgr->Count(*version), val_mgr->Count(ntohs(*length)));
 
     // Now parse the COTP packet which is encapsulated in TPKT...
     parseCOTP(len, offset, data, orig);
-
 }
 
 void ISO_Over_TCP_Analyzer::parseCOTP(int len, int offset, const u_char* data, bool orig)
 {
     EventHandlerPtr ev;
-    val_list* vl;
 
     // Field of the COTP packet..
     u_char* length;
@@ -120,18 +111,15 @@ void ISO_Over_TCP_Analyzer::parseCOTP(int len, int offset, const u_char* data, b
     u_char* protocol_id;
 
 
-    length = (u_char*) (data+offset);
+    length = (u_char*) (data + offset);
     offset += 1;
-    tpdu_type = (u_char*) (data+offset);
+    tpdu_type = (u_char*) (data + offset);
     offset += 1;
 
     // Create new COTP packet event... 
-    vl = new val_list();
-    vl->append(BuildConnVal());
-    vl->append(new Val(*tpdu_type, TYPE_COUNT));
-    ev = cotp_packet;
 
-    ConnectionEvent(ev, vl);
+    ev = cotp_packet;
+    EnqueueConnEvent(ev, ConnVal(), val_mgr->Count(*tpdu_type));
 
     switch (*tpdu_type & 0xF0) // we only need the first 4 bit for now...
     {
@@ -170,7 +158,7 @@ void ISO_Over_TCP_Analyzer::parseCOTP(int len, int offset, const u_char* data, b
             {
                 case PROTOCOL_S7_COMM:
                 {
-                    Analyzer* s7comm = S7_Comm::S7_Comm_Analyzer::Instantiate(Conn());
+                    Analyzer* s7comm = s7_comm::S7_Comm_Analyzer::Instantiate(Conn());
                     AddChildAnalyzer(s7comm);                        
 
                     // Forward the rest of the stream to the S7Comm analyzer...
@@ -179,7 +167,7 @@ void ISO_Over_TCP_Analyzer::parseCOTP(int len, int offset, const u_char* data, b
                 }
                 case PROTOCOL_S7_COMM_PLUS:
                 {
-                    Analyzer* s7commplus = S7_Comm_Plus::S7_Comm_Plus_Analyzer::Instantiate(Conn());
+                    Analyzer* s7commplus = s7_comm_plus::S7_Comm_Plus_Analyzer::Instantiate(Conn());
                     AddChildAnalyzer(s7commplus);                        
 
                     // Forward the rest of the stream to the S7CommPlus analyzer...
@@ -203,4 +191,3 @@ void ISO_Over_TCP_Analyzer::parseCOTP(int len, int offset, const u_char* data, b
         } 
     }
 }
-

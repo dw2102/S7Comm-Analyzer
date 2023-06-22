@@ -14,23 +14,20 @@ if [ -e `dirname $0`/configure.plugin ]; then
     . `dirname $0`/configure.plugin
 fi
 
-# Check for `cmake` command.
-type cmake > /dev/null 2>&1 || {
-    echo "\
-This package requires CMake, please install it first, then you may
-use this configure script to access CMake equivalent functionality.\
-" >&2;
-    exit 1;
-}
-
 usage() {
 
 cat 1>&2 <<EOF
 Usage: $0 [OPTIONS]
 
   Plugin Options:
-    --bro-dist=DIR             Path to Bro source tree
+    --cmake=PATH               Path to CMake binary
+    --zeek-dist=DIR            Path to Zeek source tree
     --install-root=DIR         Path where to install plugin into
+    --with-binpac=DIR          Path to BinPAC installation root
+    --with-broker=DIR          Path to Broker installation root
+    --with-bifcl=PATH          Path to bifcl executable
+    --enable-debug             Compile in debugging mode
+    --disable-cpp-tests        Don't build C++ unit tests
 EOF
 
 if type plugin_usage >/dev/null 2>&1; then
@@ -53,8 +50,9 @@ append_cache_entry () {
 
 # set defaults
 builddir=build
-brodist=`bro-config --bro_dist 2> /dev/null || (cd ../../.. && pwd)`
+zeekdist=""
 installroot="default"
+zeek_plugin_begin_opts=""
 CMakeCacheEntries=""
 
 while [ $# -ne 0 ]; do
@@ -68,12 +66,38 @@ while [ $# -ne 0 ]; do
             usage
             ;;
 
-        --bro-dist=*)
-            brodist=`cd $optarg && pwd`
+        --cmake=*)
+            CMakeCommand=$optarg
+            ;;
+
+        --zeek-dist=*)
+            zeekdist=`cd $optarg && pwd`
             ;;
 
         --install-root=*)
             installroot=$optarg
+            ;;
+
+        --with-binpac=*)
+            append_cache_entry BinPAC_ROOT_DIR PATH $optarg
+            binpac_root=$optarg
+            ;;
+
+        --with-broker=*)
+            append_cache_entry BROKER_ROOT_DIR PATH $optarg
+            broker_root=$optarg
+            ;;
+
+        --with-bifcl=*)
+            append_cache_entry BifCl_EXE PATH $optarg
+            ;;
+
+        --enable-debug)
+            append_cache_entry BRO_PLUGIN_ENABLE_DEBUG BOOL true
+            ;;
+
+        --disable-cpp-tests)
+            zeek_plugin_begin_opts="DISABLE_CPP_TESTS;$zeek_plugin_begin_opts"
             ;;
 
         *)
@@ -88,26 +112,81 @@ while [ $# -ne 0 ]; do
     shift
 done
 
-if [ ! -e "$brodist/bro-path-dev.in" ]; then
-    echo "Cannot determine Bro source directory, use --bro-dist=DIR."
-    exit 1
+if [ -z "$CMakeCommand" ]; then
+    # prefer cmake3 over "regular" cmake (cmake == cmake2 on RHEL)
+    if command -v cmake3 >/dev/null 2>&1 ; then
+        CMakeCommand="cmake3"
+    elif command -v cmake >/dev/null 2>&1 ; then
+        CMakeCommand="cmake"
+    else
+        echo "This plugin requires CMake, please install it first."
+        echo "Then you may use this script to configure the CMake build."
+        echo "Note: pass --cmake=PATH to use cmake in non-standard locations."
+        exit 1;
+    fi
 fi
 
-append_cache_entry BRO_DIST PATH $brodist
-append_cache_entry CMAKE_MODULE_PATH PATH $brodist/cmake
+if [ -z "$zeekdist" ]; then
+    if type zeek-config >/dev/null 2>&1; then
+        zeek_config="zeek-config"
+    else
+        echo "Either 'zeek-config' must be in PATH or '--zeek-dist=<path>' used"
+        exit 1
+    fi
+
+    append_cache_entry BRO_CONFIG_PREFIX PATH `${zeek_config} --prefix`
+    append_cache_entry BRO_CONFIG_INCLUDE_DIR PATH `${zeek_config} --include_dir`
+    append_cache_entry BRO_CONFIG_PLUGIN_DIR PATH `${zeek_config} --plugin_dir`
+    append_cache_entry BRO_CONFIG_LIB_DIR PATH `${zeek_config} --lib_dir`
+    append_cache_entry BRO_CONFIG_CMAKE_DIR PATH `${zeek_config} --cmake_dir`
+    append_cache_entry CMAKE_MODULE_PATH PATH `${zeek_config} --cmake_dir`
+
+    build_type=`${zeek_config} --build_type`
+
+    if [ "$build_type" = "debug" ]; then
+        append_cache_entry BRO_PLUGIN_ENABLE_DEBUG BOOL true
+    fi
+
+    if [ -z "$binpac_root" ]; then
+        append_cache_entry BinPAC_ROOT_DIR PATH `${zeek_config} --binpac_root`
+    fi
+
+    if [ -z "$broker_root" ]; then
+        append_cache_entry BROKER_ROOT_DIR PATH `${zeek_config} --broker_root`
+    fi
+else
+    if [ ! -e "$zeekdist/zeek-path-dev.in" ]; then
+        echo "$zeekdist does not appear to be a valid Zeek source tree."
+        exit 1
+    fi
+
+    # BRO_DIST is the canonical/historical name used by plugin CMake scripts
+    # ZEEK_DIST doesn't serve a function at the moment, but set/provided anyway
+    append_cache_entry BRO_DIST  PATH $zeekdist
+    append_cache_entry ZEEK_DIST PATH $zeekdist
+    append_cache_entry CMAKE_MODULE_PATH PATH $zeekdist/cmake
+fi
 
 if [ "$installroot" != "default" ]; then
     mkdir -p $installroot
     append_cache_entry BRO_PLUGIN_INSTALL_ROOT PATH $installroot
 fi
 
+if [ -n "$zeek_plugin_begin_opts" ]; then
+    append_cache_entry ZEEK_PLUGIN_BEGIN_OPTS STRING "$zeek_plugin_begin_opts"
+fi
+
+if type plugin_addl >/dev/null 2>&1; then
+    plugin_addl
+fi
+
 echo "Build Directory        : $builddir"
-echo "Bro Source Directory   : $brodist"
+echo "Zeek Source Directory   : $zeekdist"
 
 mkdir -p $builddir
 cd $builddir
 
-cmake $CMakeCacheEntries ..
+"$CMakeCommand" $CMakeCacheEntries ..
 
 echo "# This is the command used to configure this build" > config.status
 echo $command >> config.status

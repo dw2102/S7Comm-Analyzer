@@ -46,6 +46,8 @@ function reassable_read_items(pdu_ref: count, items: count)
 
 function reassable_read_items_ack(pdu_ref: count, items: count)
 {
+    read_count_ack = 0;
+
     if(items <= 1)
     {
         read_count_ack += 1;
@@ -67,7 +69,7 @@ function reassable_read_items_ack(pdu_ref: count, items: count)
     }
 }
 
-event bro_init() &priority=5
+event zeek_init() &priority=5
 {
     read_count = 0;
     read_count_ack = 0;

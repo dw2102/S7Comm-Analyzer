@@ -24,7 +24,7 @@ export {
     };
 }
 
-event bro_init() &priority=5
+event zeek_init() &priority=5
 {
     job_request_download = 0;
     job_download = 0;

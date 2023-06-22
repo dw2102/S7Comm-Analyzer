@@ -1,13 +1,14 @@
 #
-# Events for the ISO over TCP / S7Comm analyzer
+# Declared types for the ISO over TCP / S7Comm analyzer
 # 
 # Author: Dane Wullen
-# Date: 10.04.2018
-# Version: 1.0
+# Date: 02.06.2023
+# Version: 1.1
 # 
-# This plugin is a part of a master's thesis written at Fachhochschule in Aachen (Aachen University of Applied Sciences)
+# This plugin was a part of a master's thesis written at Fachhochschule in Aachen (Aachen University of Applied Sciences)
+# Rewritten for Zeek version 5.0.9
 # 
-#
+
 
 # TPKT / COTP events
 

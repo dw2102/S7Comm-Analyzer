@@ -2,14 +2,12 @@
  * ISO over TCP / S7Comm protocol analyzer.
  * 
  * Based on the Wireshark dissector written by Thomas Wiens 
- * https://github.com/wireshark/wireshark/blob/5d99febe66e96b55a1defa58a906be254bad3a51/epan/dissectors/packet-s7comm.c,
- * https://github.com/wireshark/wireshark/blob/5d99febe66e96b55a1defa58a906be254bad3a51/epan/dissectors/packet-s7comm.h,
- * https://github.com/wireshark/wireshark/blob/fe219637a6748130266a0b0278166046e60a2d68/epan/dissectors/packet-s7comm_szl_ids.h,
- * https://github.com/wireshark/wireshark/blob/fe219637a6748130266a0b0278166046e60a2d68/epan/dissectors/packet-s7comm_szl_ids.c,
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm.h
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm.c
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm_szl_ids.h
+ * https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm_szl_ids.c
  * https://sourceforge.net/projects/s7commwireshark/
  * 
- * partially on the PoC S7Comm-Bro-Plugin written by György Miru
- * https://github.com/CrySyS/bro-step7-plugin/blob/master/README.md,
  * 
  * RFC 1006 (ISO Transport Service on top of the TCP)
  * https://tools.ietf.org/html/rfc1006
@@ -18,15 +16,14 @@
  * https://tools.ietf.org/html/rfc0905
  * 
  * Author: Dane Wullen
- * Date: 10.04.2018
- * Version: 1.0
+ * Date: 02.06.2023
+ * Version: 1.1
  * 
- * This plugin is a part of a master's thesis written at Fachhochschule in Aachen (Aachen University of Applied Sciences)
- * 
+ * This plugin was a part of a master's thesis written at Fachhochschule in Aachen (Aachen University of Applied Sciences)
+ * Rewritten for Zeek version 5.0.9
  */
 
-#ifndef ANALYZER_PROTOCOLS7_COMM_H
-#define ANALYZER_PROTOCOLS7_COMM_H
+#pragma once
 
 #include <stdio.h>
 #include <algorithm>
@@ -34,6 +31,8 @@
 #include <analyzer/protocol/tcp/TCP.h>
 #include <analyzer/Analyzer.h>
 #include <NetVar.h>
+
+#include <iostream>
 
 typedef unsigned char u_char;
 typedef unsigned short u_int16;
@@ -137,7 +136,7 @@ static const std::vector<std::string> pi_service_names = {
     "_N_TMMVTL", "_N_TMPCIT", "_N_TMPOSM", "_N_TRESMO", "_N_TSEARC"
 };
 
-namespace analyzer { namespace S7_Comm {
+namespace zeek::analyzer { namespace s7_comm {
 
     union real_to_float_union
     {
@@ -145,7 +144,7 @@ namespace analyzer { namespace S7_Comm {
         float f;
     };
 
-    class S7_Comm_Analyzer : public tcp::TCP_ApplicationAnalyzer {
+    class S7_Comm_Analyzer : public analyzer::tcp::TCP_ApplicationAnalyzer {
         public:
             S7_Comm_Analyzer(Connection* conn);
             virtual ~S7_Comm_Analyzer();
@@ -166,7 +165,7 @@ namespace analyzer { namespace S7_Comm {
 
             // Regular functions
             void ParseAck(s7_header* header);
-            void ParseCpuService(s7_header* header, const u_char* data); // seems to be optional because no have no useful data about this function
+            void ParseCpuService(s7_header* header, const u_char* data);
             void ParseSetupCommunication(s7_header* header, const u_char* data);
             void ParseReadVariable(s7_header* header, const u_char* data);
             void ParseWriteVariable(s7_header* header, const u_char* data);
@@ -184,19 +183,19 @@ namespace analyzer { namespace S7_Comm {
             void DecodePLCControlParameter(const u_char* data, int param_offset, int fields, VectorVal* &strings_vec);
             void ParsePLCStop(s7_header* header, const u_char* data);
 
-            RecordVal* ParseAnyItem(const u_char* data);
-            RecordVal* ParseDbItem(const u_char* data);
-            RecordVal* ParseSymItem(const u_char* data);
-            RecordVal* ParseNckItem(const u_char* data);
-            RecordVal* ParseDriveAnyItem(const u_char* data);
+            zeek::RecordVal* ParseAnyItem(const u_char* data);
+            zeek::RecordVal* ParseDbItem(const u_char* data);
+            zeek::RecordVal* ParseSymItem(const u_char* data);
+            zeek::RecordVal* ParseNckItem(const u_char* data);
+            zeek::RecordVal* ParseDriveAnyItem(const u_char* data);
 
-            RecordVal* ParseReadWriteData(const u_char* data, short item_count);
+            zeek::RecordVal* ParseReadWriteData(const u_char* data, short item_count);
             short ParseAckDataWriteData(const u_char* data);
 
-            RecordVal* ParseAckDataDownloadData(const u_char* data);
+            zeek::RecordVal* ParseAckDataDownloadData(const u_char* data);
 
-            RecordVal* CreateHeader(s7_header* header);
-            RecordVal* CreateHeaderWithError(s7_header* header);
+            zeek::RecordVal* CreateHeader(s7_header* header);
+            zeek::RecordVal* CreateHeaderWithError(s7_header* header);
 
             // UserData functions
             void ParseUDProgSubfunction(s7_header* header, const u_char* data, short subfunction, short type);
@@ -208,21 +207,21 @@ namespace analyzer { namespace S7_Comm {
             void ParseUDTimeSubfunction(s7_header* header, const u_char* data, short subfunction, short type);
             void ParseUDNCProgSubfunction(s7_header* header, const u_char* data, short subfunction, short type);
 
-            RecordVal* ParseUDUnknownData(const u_char* data);
-            RecordVal* ParseUDReqDiagData(short subfunction, const u_char* data);
-            RecordVal* ParseUDProgUnknownData(short subfunction, const u_char* data);
-            RecordVal* ParseUDVarTab1Request(short subfunction, const u_char* data);
-            RecordVal* ParseUDVarTab1Response(short subfunction, const u_char* data);
+            zeek::RecordVal* ParseUDUnknownData(const u_char* data);
+            zeek::RecordVal* ParseUDReqDiagData(short subfunction, const u_char* data);
+            zeek::RecordVal* ParseUDProgUnknownData(short subfunction, const u_char* data);
+            zeek::RecordVal* ParseUDVarTab1Request(short subfunction, const u_char* data);
+            zeek::RecordVal* ParseUDVarTab1Response(short subfunction, const u_char* data);
 
             void ParseUDCyclMem(s7_header* header, std::string packet_type, short subfunction, const u_char* data);
             void ParseUDCyclMemAck(s7_header* header, std::string packet_type, short subfunction, const u_char* data);
 
-            RecordVal* ParseUDBlockListType(short subfunction, const u_char* data);
-            RecordVal* ParseUDBlockBlockInfoReq(short subfunction, const u_char* data);
-            RecordVal* ParseUDBlockBlockInfoRes(short subfunction, const u_char* data);
+            zeek::RecordVal* ParseUDBlockListType(short subfunction, const u_char* data);
+            zeek::RecordVal* ParseUDBlockBlockInfoReq(short subfunction, const u_char* data);
+            zeek::RecordVal* ParseUDBlockBlockInfoRes(short subfunction, const u_char* data);
 
 
-            RecordVal* ParseS7Time(const u_char* data);
+            zeek::RecordVal* ParseS7Time(const u_char* data);
 
             std::string HexToString(const unsigned char* data, int length);
             std::string HexToASCII(const unsigned char* data, int length);
@@ -233,7 +232,5 @@ namespace analyzer { namespace S7_Comm {
             
     };
 
-} } //end namespaces
-
-
-#endif
+} 
+} //end namespaces
