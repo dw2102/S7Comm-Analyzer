@@ -31,7 +31,6 @@
 #include <zeek/analyzer/protocol/tcp/TCP.h>
 #include <zeek/analyzer/Analyzer.h>
 #include <NetVar.h>
-#include <iostream>
 #include "Typedef.h"
 
 namespace zeek::analyzer { namespace iso_over_tcp {

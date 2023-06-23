@@ -33,14 +33,7 @@
 #include <analyzer/protocol/tcp/TCP.h>
 #include <analyzer/Analyzer.h>
 #include <NetVar.h>
-
-typedef unsigned char u_char;
-typedef unsigned short u_int16;
-typedef short int16;
-typedef unsigned int u_int32;
-typedef int int32;
-typedef uint64_t u_int64;
-typedef int64_t int64;
+#include <Typedef.h>
 
 struct s7plus_header {
     u_char protocol_id;
